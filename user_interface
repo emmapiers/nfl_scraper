@@ -1,0 +1,50 @@
+import pickle
+import tkinter as tk
+from tkinter import ttk
+
+with open('all_data.pkl', 'rb') as file:
+    data = pickle.load(file)
+
+
+def create_ui(data):
+    root = tk.Tk()
+    root.title("NFL Quarterback Passing Yards")  # Set the window title
+
+    # Configure the root window's background color
+    root.configure(bg="#f0f0f0")
+
+    # Create a frame for the title
+    title_frame = tk.Frame(root, bg="#004080", pady=10)
+    title_frame.pack(fill=tk.X)
+
+    # Create a label for the title
+    title_label = tk.Label(title_frame, text="NFL Quarterback Passing Yards", font=("Arial", 20, "bold"), fg="white", bg="#004080")
+    title_label.pack()
+
+    # Create a frame for the Treeview
+    table_frame = tk.Frame(root, bg="#f0f0f0", padx=20, pady=20)
+    table_frame.pack(fill=tk.BOTH, expand=True)
+
+    # Create a styled Treeview widget
+    style = ttk.Style()
+    style.configure("mystyle.Treeview", highlightthickness=0, bd=0, font=('Arial', 12))  # Modify the font of the body
+    style.configure("mystyle.Treeview.Heading", font=('Arial', 14, 'bold'))  # Modify the font of the headings
+    style.layout("mystyle.Treeview", [('mystyle.Treeview.treearea', {'sticky': 'nswe'})])  # Remove the borders
+
+    tree = ttk.Treeview(table_frame, columns=('Player', 'Yards'), show='headings', style="mystyle.Treeview")
+    tree.heading('Player', text='Player')
+    tree.heading('Yards', text='Passing Yards')
+
+    for item in data:
+        tree.insert('', tk.END, values=item)
+
+    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Add a scrollbar
+    scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=tree.yview)
+    tree.configure(yscroll=scrollbar.set)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    root.mainloop()
+
+create_ui(data)
