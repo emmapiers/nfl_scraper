@@ -1,14 +1,15 @@
 import pickle
 import tkinter as tk
 from tkinter import ttk
-
+from PIL import Image, ImageTk 
 with open('all_data.pkl', 'rb') as file:
     data = pickle.load(file)
 
 
 def create_ui(data):
     root = tk.Tk()
-    root.title("NFL Quarterback Passing Yards")  # Set the window title
+    root.title("JP")  # Set the window title
+    root.geometry("800x600")
 
     # Configure the root window's background color
     root.configure(bg="#f0f0f0")
@@ -17,8 +18,19 @@ def create_ui(data):
     title_frame = tk.Frame(root, bg="#004080", pady=10)
     title_frame.pack(fill=tk.X)
 
+    img = Image.open("tor.png")
+    resized_image = img.resize((45, 55)) 
+    img_right = ImageTk.PhotoImage(resized_image)
+    img_left = ImageTk.PhotoImage(resized_image)
+
+    image_label_left = tk.Label(title_frame, image=img_left, bg="#004080")
+    image_label_left.pack(side=tk.LEFT, padx=10)
+    
+    image_label_right = tk.Label(title_frame, image=img_right, bg="#004080")
+    image_label_right.pack(side=tk.RIGHT, padx=10)
+
     # Create a label for the title
-    title_label = tk.Label(title_frame, text="NFL Quarterback Passing Yards", font=("Arial", 20, "bold"), fg="white", bg="#004080")
+    title_label = tk.Label(title_frame, text="JP NFL STATS", font=("Arial", 40, "bold"), fg="white", bg="#004080")
     title_label.pack()
 
     # Create a frame for the Treeview
@@ -45,6 +57,8 @@ def create_ui(data):
     tree.configure(yscroll=scrollbar.set)
     scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+
+    title_label.image = img
     root.mainloop()
 
 create_ui(data)
