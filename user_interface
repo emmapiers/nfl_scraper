@@ -1,14 +1,11 @@
-import pickle
 import tkinter as tk
 from tkinter import ttk
-from PIL import Image, ImageTk 
-with open('all_data.pkl', 'rb') as file:
-    data = pickle.load(file)
+from PIL import Image, ImageTk
+import pickle
 
-
-def create_ui(data):
+def create_ui(team_data, qb_data):
     root = tk.Tk()
-    root.title("JP")  # Set the window title
+    root.title("JP NFL Stats")  # Set the window title
     root.geometry("800x600")
 
     # Configure the root window's background color
@@ -33,32 +30,87 @@ def create_ui(data):
     title_label = tk.Label(title_frame, text="JP NFL STATS", font=("Arial", 40, "bold"), fg="white", bg="#004080")
     title_label.pack()
 
-    # Create a frame for the Treeview
-    table_frame = tk.Frame(root, bg="#f0f0f0", padx=20, pady=20)
-    table_frame.pack(fill=tk.BOTH, expand=True)
+    # Create a notebook (tabbed interface)
+    notebook = ttk.Notebook(root)
+    notebook.pack(fill=tk.BOTH, expand=True)
 
-    # Create a styled Treeview widget
+    # Create the Team Stats tab
+    team_frame = tk.Frame(notebook, bg="#f0f0f0", padx=20, pady=20)
+    notebook.add(team_frame, text="Team Stats")
+
+    # Create a styled Treeview widget for Team Stats
     style = ttk.Style()
     style.configure("mystyle.Treeview", highlightthickness=0, bd=0, font=('Arial', 12))  # Modify the font of the body
     style.configure("mystyle.Treeview.Heading", font=('Arial', 14, 'bold'))  # Modify the font of the headings
     style.layout("mystyle.Treeview", [('mystyle.Treeview.treearea', {'sticky': 'nswe'})])  # Remove the borders
 
-    tree = ttk.Treeview(table_frame, columns=('Player', 'Yards'), show='headings', style="mystyle.Treeview")
-    tree.heading('Player', text='Player')
-    tree.heading('Yards', text='Passing Yards')
+    team_columns = ('Team', 'Plays/G', 'Pass %/G', 'Rush %/G')
+    team_tree = ttk.Treeview(team_frame, columns=team_columns, show='headings', style="mystyle.Treeview")
+    
+    # Create a sorting function for team stats
+    def sort_column(treeview, col, reverse):
+        l = [(treeview.set(k, col), k) for k in treeview.get_children('')]
+        try:
+            l.sort(key=lambda t: float(t[0]), reverse=reverse)
+        except ValueError:
+            l.sort(reverse=reverse)
 
-    for item in data:
-        tree.insert('', tk.END, values=item)
+        for index, (val, k) in enumerate(l):
+            treeview.move(k, '', index)
 
-    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        treeview.heading(col, command=lambda: sort_column(treeview, col, not reverse))
 
-    # Add a scrollbar
-    scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=tree.yview)
-    tree.configure(yscroll=scrollbar.set)
-    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    # Create the column headings with sorting functionality for team stats
+    for col in team_columns:
+        team_tree.heading(col, text=col, command=lambda _col=col: sort_column(team_tree, _col, False))
 
+    # Insert team data into the Treeview
+    for item in team_data:
+        team_tree.insert('', tk.END, values=(item['Team'], item['Plays/G'], item['Pass %/G'], item['Rush %/G']))
+
+    team_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Add a scrollbar for team stats
+    team_scrollbar = ttk.Scrollbar(team_frame, orient=tk.VERTICAL, command=team_tree.yview)
+    team_tree.configure(yscroll=team_scrollbar.set)
+    team_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    # Create the QB Stats tab
+    qb_frame = tk.Frame(notebook, bg="#f0f0f0", padx=20, pady=20)
+    notebook.add(qb_frame, text="QB Stats")
+
+    qb_columns = ('Player', 'Cmp', 'Att', 'Yds', 'TD', 'TD%', 'Y/A')
+    qb_tree = ttk.Treeview(qb_frame, columns=qb_columns, show='headings', style="mystyle.Treeview")
+    
+    # Create the column headings with sorting functionality for QB stats
+    for col in qb_columns:
+        qb_tree.heading(col, text=col, command=lambda _col=col: sort_column(qb_tree, _col, False))
+
+    # Insert QB data into the Treeview
+    for item in qb_data:
+        qb_tree.insert('', tk.END, values=(item['Player'], item['Cmp'], item['Att'], item['Yds'], item['TD'], 
+                                           item['TD%'], item['Y/A']))
+
+    qb_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Add a scrollbar for QB stats
+    qb_scrollbar = ttk.Scrollbar(qb_frame, orient=tk.VERTICAL, command=qb_tree.yview)
+    qb_tree.configure(yscroll=qb_scrollbar.set)
+    qb_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     title_label.image = img
     root.mainloop()
 
-create_ui(data)
+def load_data_and_run_ui():
+    # Load data from the pickle files
+    with open('team_data.pkl', 'rb') as file:
+        team_data = pickle.load(file)
+
+    with open('qb_data.pkl', 'rb') as file:
+        qb_data = pickle.load(file)
+    
+    # Create the UI using the loaded data
+    create_ui(team_data, qb_data)
+
+if __name__ == "__main__":
+    load_data_and_run_ui()

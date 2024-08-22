@@ -7,8 +7,9 @@ import time
 
 url = "https://www.nfl.com/stats/player-stats/"
 url2 = "https://www.pro-football-reference.com/years/2023/opp.htm"
+url3 = "https://www.pro-football-reference.com/years/2023/passing.htm"
 
-def scrape_page2(url2):
+def scrape_team_page(url2):
 
     driver = webdriver.Safari()
 
@@ -62,13 +63,69 @@ def scrape_page2(url2):
             
             plays_stats.append({"Team": team_name, "Plays/G": str(plays_per_game), "Pass %/G": str(pass_percentage_per_game), "Rush %/G": str(rushes_percentage_per_game)})
 
-    # Print the extracted "Plays" stats
-    for stat in plays_stats:
-        print(stat)
-
     # Close the browser
     driver.quit()
 
+    return plays_stats
+
+def scrape_qb_page(url3):
+    driver = webdriver.Safari()
+
+    driver.get(url3)
+    driver.implicitly_wait(10)
+    
+    html = driver.page_source
+    soup = bs(html, 'html.parser')
+
+    table = soup.find('table', {'id': 'passing'})
+
+    if not table: 
+        print("Table not found")
+        return 
+        
+    # Step 5: Extract the headers from the first row of the table header
+    headers = [th.get_text().strip() for th in table.thead.find_all('th')]
+
+    player_index = headers.index("Player")
+    games_index = headers.index("G")
+    attempts_index = headers.index("Att")
+    completions_index = headers.index("Cmp")
+    yards_index = headers.index("Yds")
+    tds_index = headers.index("TD")
+    tds_percentage_index = headers.index("TD%")
+    yards_per_attempt_index = headers.index("Y/A")
+
+
+    #print(headers)
+
+   # columns_of_interest = ["Player", "G", "Att", "Cmp", "Yds", "TD", "TD%", "Y/A"]
+    #indices = {col: headers.index(col) for col in columns_of_interest}
+
+    rows = table.find('tbody').find_all('tr')
+    passing_stats = []
+
+    for row in rows[:-1]:
+        columns = row.find_all('td')
+        if columns:
+
+            games_played = columns[games_index-1].getText().strip()
+            players = columns[player_index-1].getText().strip()
+            completions = columns[completions_index-1].getText().strip()
+            attempts = columns[attempts_index -1].getText().strip()
+            yards = columns[yards_index -1].getText().strip()
+            tds = columns[tds_index -1].getText().strip()
+            tds_percentage = columns[tds_percentage_index -1].getText().strip()
+            yards_per_attempt = columns[yards_per_attempt_index -1].getText().strip()
+           
+            passing_stats.append({"Player": players, "Cmp": str(completions), "Att": str(attempts), "Yds": str(yards), "TD": str(tds), "TD%": str(tds_percentage), "Y/A": str(yards_per_attempt)})
+
+    driver.quit()
+
+    return passing_stats
+    
+
+    
+   
 
 def scrape_page(url):
     response = requests.get(url)
@@ -110,20 +167,15 @@ def get_next_page(url):
 
 
 def main():
-   scrape_page2(url2)
-   
-   # base_url = 'https://www.nfl.com/stats/player-stats/category/passing/2023/REG/all/passingyards/DESC'
+    url2 = "https://www.pro-football-reference.com/years/2023/opp.htm"
+    team_data = scrape_team_page(url2)
+    with open('team_data.pkl', 'wb') as file:
+        pickle.dump(team_data, file)
 
-    #all_data = []
-   # url = base_url
-   # while url:
-   #     page_data = scrape_page(url)
-   #     all_data.extend(page_data)
-   #     url = get_next_page(url)
 
-   # with open('all_data.pkl', 'wb') as file:
-   #     pickle.dump(all_data, file)
-    
+    qb_data = scrape_qb_page(url3)
+    with open('qb_data.pkl', 'wb') as file:
+        pickle.dump(qb_data, file)
 
 if __name__ == "__main__":
    main()
