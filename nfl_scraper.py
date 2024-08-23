@@ -5,9 +5,9 @@ from bs4 import BeautifulSoup as bs
 from selenium import webdriver
 import time
 
-url = "https://www.nfl.com/stats/player-stats/"
 url2 = "https://www.pro-football-reference.com/years/2023/opp.htm"
 url3 = "https://www.pro-football-reference.com/years/2023/passing.htm"
+url4 = "https://www.pro-football-reference.com/years/2023/receiving.htm"
 
 def scrape_team_page(url2):
 
@@ -56,10 +56,10 @@ def scrape_team_page(url2):
             plays_int = float(plays)
 
             plays_per_game = round(plays_int / games_played_int, 1)
-            passes_per_game = round(passes_int / games_played_int, 3)
-            pass_percentage_per_game = round((passes_per_game / plays_per_game) * 100, 3)
-            rushes_per_game = round(rushes_int / games_played_int, 3)
-            rushes_percentage_per_game = round((rushes_per_game / plays_per_game) * 100, 3)
+            passes_per_game = round(passes_int / games_played_int, 1)
+            pass_percentage_per_game = round((passes_per_game / plays_per_game) * 100, 1)
+            rushes_per_game = round(rushes_int / games_played_int, 1)
+            rushes_percentage_per_game = round((rushes_per_game / plays_per_game) * 100, 1)
             
             plays_stats.append({"Team": team_name, "Plays/G": str(plays_per_game), "Pass %/G": str(pass_percentage_per_game), "Rush %/G": str(rushes_percentage_per_game)})
 
@@ -95,12 +95,6 @@ def scrape_qb_page(url3):
     tds_percentage_index = headers.index("TD%")
     yards_per_attempt_index = headers.index("Y/A")
 
-
-    #print(headers)
-
-   # columns_of_interest = ["Player", "G", "Att", "Cmp", "Yds", "TD", "TD%", "Y/A"]
-    #indices = {col: headers.index(col) for col in columns_of_interest}
-
     rows = table.find('tbody').find_all('tr')
     passing_stats = []
 
@@ -121,53 +115,88 @@ def scrape_qb_page(url3):
 
     driver.quit()
 
+
     return passing_stats
     
 
+def scrape_rb_page(url4):
+    driver = webdriver.Safari()
+
+    driver.get(url4)
+    driver.implicitly_wait(10)
     
-   
+    html = driver.page_source
+    soup = bs(html, 'html.parser')
 
-def scrape_page(url):
-    response = requests.get(url)
-    response.raise_for_status()
+    table = soup.find('table', {'id': 'receiving'})
 
-    
-    soup = bs(response.content, 'html.parser')
-    table = soup.find('table', {'class': 'd3-o-table'})
-
-    if table: 
-        rows = table.find_all('tr')[1:] #skip the header row
-        data = []
-
-        for row in rows:
-            columns = row.find_all('td')
-
-            #extract name and passing yrds
-            player_name = columns[0].text.strip()
-            passing_yrds = columns[1].text.strip()
-
-            data.append((player_name, passing_yrds))
+    if not table: 
+        print("Table not found")
+        return 
         
-        return data
-    print("Failed to find the table. The structure of the HTML might have changed.")
-    return []
+    # Step 5: Extract the headers from the first row of the table header
+    headers = [th.get_text().strip() for th in table.thead.find_all('th')]
+
+    player_index = headers.index("Player")
+    team_index = headers.index("Tm")
+    position_index = headers.index("Pos")
+    games_index = headers.index("G")
+    targets_index = headers.index("Tgt")
+    yards_per_target_index = headers.index("Y/R")
+    receptions_per_game_index = headers.index("R/G")
+    yards_per_game_index = headers.index("Y/G")
+    tds_per_game_index = headers.index("TD")
+    
+
+
+    rows = table.find('tbody').find_all('tr')
+    receiving_stats = []
+
+    for row in rows[:-1]:
+        columns = row.find_all('td')
+        if columns:
 
     
-def get_next_page(url):
-    response = requests.get(url)
-    response.raise_for_status()
+            players = columns[player_index-1].getText().strip().rstrip('*+')
+            position = columns[position_index-1].getText().strip()
 
-    soup = bs(response.content, 'html.parser')
-    next_button = soup.find('a', {'class': 'nfl-o-table-pagination__next'})
-    if next_button and 'href' in next_button.attrs:
-        return 'https://www.nfl.com' + next_button['href']
-    return None
+
+            if position in ["WR", "TE"]:
+                team = columns[team_index-1].getText().strip()
+                games_played = columns[games_index-1].getText().strip()
+                targets_per_game = columns[targets_index -1].getText().strip()
+                yards_per_target = columns[yards_per_target_index -1].getText().strip()
+                receptions_per_game = columns[receptions_per_game_index -1].getText().strip()
+                yards_per_game = columns[yards_per_game_index -1].getText().strip()
+                tds_per_game = columns[tds_per_game_index -1].getText().strip()
+
+                games_played_int = int(games_played)
+                targets_per_game = int(targets_per_game)
+                tds_per_game = int(tds_per_game)
+
+                targets_per_game = round(targets_per_game / games_played_int, 1)
+                tds_per_game = round(tds_per_game / games_played_int, 3)
+
+                receiving_stats.append({
+                    "Player": players, 
+                    "Team": str(team),
+                    "Tgt/game": str(targets_per_game), 
+                    "Y/R": str(yards_per_target), 
+                    "R/G": str(receptions_per_game), 
+                    "Y/G": str(yards_per_game), 
+                    "TD/game": str(tds_per_game)
+                    })
+
+    driver.quit()
+    for stat in receiving_stats:
+        print(stat)
+
+    return receiving_stats
     
 
 
 
 def main():
-    url2 = "https://www.pro-football-reference.com/years/2023/opp.htm"
     team_data = scrape_team_page(url2)
     with open('team_data.pkl', 'wb') as file:
         pickle.dump(team_data, file)
@@ -176,6 +205,11 @@ def main():
     qb_data = scrape_qb_page(url3)
     with open('qb_data.pkl', 'wb') as file:
         pickle.dump(qb_data, file)
+
+    wr_data = scrape_rb_page(url4)
+    with open('wr_data.pkl', 'wb')as file:
+        pickle.dump(wr_data, file)
+
 
 if __name__ == "__main__":
    main()

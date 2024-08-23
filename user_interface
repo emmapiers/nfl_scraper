@@ -3,7 +3,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 import pickle
 
-def create_ui(team_data, qb_data):
+def create_ui(team_data, qb_data, wr_data):
     root = tk.Tk()
     root.title("JP NFL Stats")  # Set the window title
     root.geometry("800x600")
@@ -98,6 +98,29 @@ def create_ui(team_data, qb_data):
     qb_tree.configure(yscroll=qb_scrollbar.set)
     qb_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+    # Create the WR Data tab
+    wr_frame = tk.Frame(notebook, bg="#f0f0f0", padx=20, pady=20)
+    notebook.add(wr_frame, text="WR Data")
+
+    wr_columns = ('Player', 'Team', 'Tgt/G', 'Y/R', 'R/G', 'Y/G', 'TD/G')
+    wr_tree = ttk.Treeview(wr_frame, columns=wr_columns, show='headings', style="mystyle.Treeview")
+    
+    # Create the column headings with sorting functionality for WR data
+    for col in wr_columns:
+        wr_tree.heading(col, text=col, command=lambda _col=col: sort_column(wr_tree, _col, False))
+
+    # Insert WR data into the Treeview
+    for item in wr_data:
+        wr_tree.insert('', tk.END, values=(item['Player'], item['Team'], item['Tgt/game'], item['Y/R'], 
+                                           item['R/G'], item['Y/G'], item['TD/game']))
+
+    wr_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Add a scrollbar for WR data
+    wr_scrollbar = ttk.Scrollbar(wr_frame, orient=tk.VERTICAL, command=wr_tree.yview)
+    wr_tree.configure(yscroll=wr_scrollbar.set)
+    wr_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
     title_label.image = img
     root.mainloop()
 
@@ -108,9 +131,12 @@ def load_data_and_run_ui():
 
     with open('qb_data.pkl', 'rb') as file:
         qb_data = pickle.load(file)
+
+    with open('wr_data.pkl', 'rb') as file:
+        wr_data = pickle.load(file)
     
     # Create the UI using the loaded data
-    create_ui(team_data, qb_data)
+    create_ui(team_data, qb_data, wr_data)
 
 if __name__ == "__main__":
     load_data_and_run_ui()
