@@ -3,7 +3,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 import pickle
 
-def create_ui(team_data, qb_data, wr_data):
+def create_ui(team_data, qb_data, wr_data, rb_data):
     root = tk.Tk()
     root.title("JP NFL Stats")  # Set the window title
     root.geometry("800x600")
@@ -111,8 +111,8 @@ def create_ui(team_data, qb_data, wr_data):
 
     # Insert WR data into the Treeview
     for item in wr_data:
-        wr_tree.insert('', tk.END, values=(item['Player'], item['Team'], item['Tgt/game'], item['Y/R'], 
-                                           item['R/G'], item['Y/G'], item['TD/game']))
+        wr_tree.insert('', tk.END, values=(item['Player'], item['Team'], item['Tgt/G'], item['Y/R'], 
+                                           item['R/G'], item['Y/G'], item['TD/G']))
 
     wr_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -120,6 +120,30 @@ def create_ui(team_data, qb_data, wr_data):
     wr_scrollbar = ttk.Scrollbar(wr_frame, orient=tk.VERTICAL, command=wr_tree.yview)
     wr_tree.configure(yscroll=wr_scrollbar.set)
     wr_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    # Create the RB Stats tab
+    rb_frame = tk.Frame(notebook, bg="#f0f0f0", padx=20, pady=20)
+    notebook.add(rb_frame, text="RB Stats")
+
+    rb_columns = ('Player', 'Team', 'Att/G', 'Y/A', 'TD %', 'Tgt/G', 'Y/R', 'R/G', 'Y/G', 'TD/G')
+    rb_tree = ttk.Treeview(rb_frame, columns=rb_columns, show='headings', style="mystyle.Treeview")
+    
+    # Create the column headings with sorting functionality for RB data
+    for col in rb_columns:
+        rb_tree.heading(col, text=col, command=lambda _col=col: sort_column(rb_tree, _col, False))
+
+
+    # Insert RB data into the Treeview
+    for item in rb_data:
+        rb_tree.insert('', tk.END, values=(item['Player'], item['Team'], item['Att/G'], item['Y/A'], item['TD %'], 
+                                           item['Tgt/G'], item['Y/R'], item['R/G'], item['Y/G'], item['TD/G']))
+
+    rb_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Add a scrollbar for RB data
+    rb_scrollbar = ttk.Scrollbar(rb_frame, orient=tk.VERTICAL, command=rb_tree.yview)
+    rb_tree.configure(yscroll=rb_scrollbar.set)
+    rb_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     title_label.image = img
     root.mainloop()
@@ -134,9 +158,12 @@ def load_data_and_run_ui():
 
     with open('wr_data.pkl', 'rb') as file:
         wr_data = pickle.load(file)
+
+    with open('rb_data.pkl', 'rb') as file:
+        rb_data = pickle.load(file)
     
     # Create the UI using the loaded data
-    create_ui(team_data, qb_data, wr_data)
+    create_ui(team_data, qb_data, wr_data, rb_data)
 
 if __name__ == "__main__":
     load_data_and_run_ui()
