@@ -9,9 +9,94 @@ url2 = "https://www.pro-football-reference.com/years/2023/opp.htm"
 url3 = "https://www.pro-football-reference.com/years/2023/passing.htm"
 url4 = "https://www.pro-football-reference.com/years/2023/receiving.htm"
 url5 = "https://www.pro-football-reference.com/years/2023/rushing.htm"
+url6 = "https://www.pro-football-reference.com/years/2023/#all_rushing"
 
 
 rb_stats = []
+qb_rushing_stats = []
+team_rushing_stats = []
+qb_passing_stats = []
+
+team_shorthand_to_full = {
+    "ARI": "Arizona Cardinals",
+    "ATL": "Atlanta Falcons",
+    "BAL": "Baltimore Ravens",
+    "BUF": "Buffalo Bills",
+    "CAR": "Carolina Panthers",
+    "CHI": "Chicago Bears",
+    "CIN": "Cincinnati Bengals",
+    "CLE": "Cleveland Browns",
+    "DAL": "Dallas Cowboys",
+    "DEN": "Denver Broncos",
+    "DET": "Detroit Lions",
+    "GNB": "Green Bay Packers",
+    "HOU": "Houston Texans",
+    "IND": "Indianapolis Colts",
+    "JAX": "Jacksonville Jaguars",
+    "KAN": "Kansas City Chiefs",
+    "LAC": "Los Angeles Chargers",
+    "LAR": "Los Angeles Rams",
+    "LVR": "Las Vegas Raiders",
+    "MIA": "Miami Dolphins",
+    "MIN": "Minnesota Vikings",
+    "NWE": "New England Patriots",
+    "NOR": "New Orleans Saints",
+    "NYG": "New York Giants",
+    "NYJ": "New York Jets",
+    "PHI": "Philadelphia Eagles",
+    "PIT": "Pittsburgh Steelers",
+    "SFO": "San Francisco 49ers",
+    "SEA": "Seattle Seahawks",
+    "TAM": "Tampa Bay Buccaneers",
+    "TEN": "Tennessee Titans",
+    "WAS": "Washington Commanders"
+}
+
+def scrap_team_offence_page(url6):
+    driver = webdriver.Safari()
+
+    driver.get(url6)
+    driver.implicitly_wait(10)
+    
+    html = driver.page_source
+    soup = bs(html, 'html.parser')   
+
+    rushing_div = soup.find('div', {'id': 'all_rushing'})
+    
+    if rushing_div:
+        # Now look for the table within the rushing_div
+        table = rushing_div.find('table')
+        if not table:
+            print("Table not found within the div")
+            return
+    else:
+        print("Div with id 'all_rushing' not found")
+
+    headers = [th.get_text().strip() for th in table.thead.find_all('th')]
+
+    team_index = headers.index("Tm")
+    attempts_index = headers.index("Att")
+
+    rows = table.find('tbody').find_all('tr')
+    
+
+    for row in rows[:-1]:
+        columns = row.find_all('td')
+        if columns:
+
+            team = columns[team_index-1].getText().strip()
+            attempts = columns[attempts_index-1].getText().strip()
+
+
+        team_rushing_stats.append({
+            "Team": team, 
+            "Att": attempts
+        })
+
+
+    # Close the browser after scraping
+    driver.quit()
+
 def scrape_team_page(url2):
 
     driver = webdriver.Safari()
@@ -64,7 +149,12 @@ def scrape_team_page(url2):
             rushes_per_game = round(rushes_int / games_played_int, 1)
             rushes_percentage_per_game = round((rushes_per_game / plays_per_game) * 100, 1)
             
-            plays_stats.append({"Team": team_name, "Plays/G": str(plays_per_game), "Pass %/G": str(pass_percentage_per_game), "Rush %/G": str(rushes_percentage_per_game)})
+            plays_stats.append({
+                "Team": team_name, 
+                "Plays/G": str(plays_per_game), 
+                "Pass %/G": str(pass_percentage_per_game), 
+                "Rush %/G": str(rushes_percentage_per_game)
+                })
 
     # Close the browser
     driver.quit()
@@ -90,6 +180,7 @@ def scrape_qb_page(url3):
     headers = [th.get_text().strip() for th in table.thead.find_all('th')]
 
     player_index = headers.index("Player")
+    team_index = headers.index("Team")
     games_index = headers.index("G")
     attempts_index = headers.index("Att")
     completions_index = headers.index("Cmp")
@@ -99,13 +190,14 @@ def scrape_qb_page(url3):
     yards_per_attempt_index = headers.index("Y/A")
 
     rows = table.find('tbody').find_all('tr')
-    passing_stats = []
+
 
     for row in rows[:-1]:
         columns = row.find_all('td')
         if columns:
 
-            games_played = columns[games_index-1].getText().strip()
+            games_played = int(columns[games_index-1].getText().strip())
+            team = columns[team_index-1].getText().strip()
             players = columns[player_index-1].getText().strip()
             completions = columns[completions_index-1].getText().strip()
             attempts = columns[attempts_index -1].getText().strip()
@@ -113,13 +205,28 @@ def scrape_qb_page(url3):
             tds = columns[tds_index -1].getText().strip()
             tds_percentage = columns[tds_percentage_index -1].getText().strip()
             yards_per_attempt = columns[yards_per_attempt_index -1].getText().strip()
+
+            cmp_per_game = round(int(completions) / games_played, 1)
+            att_per_game = round(int(attempts) / games_played, 1)
+            yds_per_game = round(int(yards) / games_played, 1)
+            tds_per_game = round(int(tds) / games_played, 1)
            
-            passing_stats.append({"Player": players, "Cmp": str(completions), "Att": str(attempts), "Yds": str(yards), "TD": str(tds), "TD%": str(tds_percentage), "Y/A": str(yards_per_attempt)})
+            qb_passing_stats.append({
+                "Player": players, 
+                "Team": str(team),
+                "Cmp/G": str(cmp_per_game), 
+                "Att/G": str(att_per_game), 
+                "Yds/G": str(yds_per_game), 
+                "TD/G": str(tds_per_game), 
+                "TD%": str(tds_percentage), 
+                "Y/A": str(yards_per_attempt)
+                })
 
     driver.quit()
 
 
-    return passing_stats
+
+    return qb_passing_stats
     
 
 def scrape_receiving_page(url4):
@@ -290,13 +397,78 @@ def scrape_rushing_page(url5):
                     "Y/A": str(yards_per_att), 
                     "TD %": str(tds_per_game)
                     })
+            elif position == "QB":
+                yards_per_att = columns[yards_per_att_index-5 ].getText().strip()
+                attempts = columns[attempts_index -5].getText().strip()
+                team = columns[team_index-5].getText().strip()
+
+                qb_rushing_stats.append({
+                    "Player": players, 
+                    "Team": team,
+                    "Yds/Carry": str(yards_per_att), 
+                    "Att": str(attempts)
+
+                })
             
 
     driver.quit()
 
     return rushing_stats
 
+def combine_qb_stats(qb_rushing_stats, qb_passing_stats, team_rushing_stats):
+    all_columns = {
+        "Player": "",
+        "Team": "",
+        "Cmp/G": "0",
+        "Att/G": "0", 
+        "Yds/G": "0",
+        "TD/G": "0",
+        "Y/A": "0", 
+        "Carry %": "0.0", 
+        "Yds/Carry": "0",
+    }
+    # Initialize combined stats list
+    combined_stats = []
 
+    rushing_dict =  {stat['Player']: stat for stat in qb_rushing_stats}
+    passing_dict = {stat['Player']: stat for stat in qb_passing_stats}
+
+    team_rushing_dict = {team_stat['Team']: team_stat['Att'] for team_stat in team_rushing_stats}
+    
+    all_players = set(rushing_dict.keys()).union(set(passing_dict.keys()))
+
+    for player in all_players:
+        # Start with a base dictionary filled with default values (0)
+        combined_stat = all_columns.copy()
+        combined_stat["Player"] = player  # Set the player's name
+
+        if player in rushing_dict:
+            combined_stat.update(rushing_dict[player])
+
+        if player in passing_dict:
+            combined_stat.update(passing_dict[player])
+
+        
+
+        if player in rushing_dict:
+            player_team_shorthand = rushing_dict[player]["Team"] 
+            player_att = float(rushing_dict[player]["Att"])
+            
+            full_team_name = team_shorthand_to_full.get(player_team_shorthand)
+
+            if full_team_name and full_team_name in team_rushing_dict:
+                team_att = float(team_rushing_dict[full_team_name])  # Full team's rushing attempts
+                
+                # Calculate Carry % as (player_att / team_att) * 100
+                carry_percentage = (player_att / team_att) * 100
+                combined_stat["Carry %"] = f"{carry_percentage:.2f}"  # Format to 2 decimal places
+
+
+        combined_stats.append(combined_stat)
+
+    return combined_stats
+    
+                     
 def combine_rb_stats(rushing_stats, receiving_stats):
     # Define all possible columns for a player's stats
     all_columns = {
@@ -343,10 +515,18 @@ def main():
     #with open('team_data.pkl', 'wb') as file:
     #    pickle.dump(team_data, file)
 
-
-   # qb_data = scrape_qb_page(url3)
-   # with open('qb_data.pkl', 'wb') as file:
-   #     pickle.dump(qb_data, file)
+    scrap_team_offence_page(url6)
+    scrape_qb_page(url3)
+    scrape_rushing_page(url5)
+    st = combine_qb_stats(qb_rushing_stats, qb_passing_stats, team_rushing_stats)
+    for s in st:
+        print(st)
+    
+    
+    '''
+    qb_data = scrape_qb_page(url3)
+    with open('qb_data.pkl', 'wb') as file:
+        pickle.dump(qb_data, file)
 
     wr_data = scrape_receiving_page(url4)
     with open('wr_data.pkl', 'wb')as file:
@@ -355,9 +535,13 @@ def main():
     rb_data = scrape_rushing_page(url5)
     
     rb_combined_data = combine_rb_stats(rb_data, rb_stats)
-
     with open('rb_data.pkl', 'wb') as file:
         pickle.dump(rb_combined_data, file)
+
+
+    for stat in qb_rushing_stats:
+        print(stat)
+    '''
 
 if __name__ == "__main__":
    main()
