@@ -6,10 +6,12 @@ import pickle
 def create_ui(team_data, qb_data, wr_data, rb_data):
     root = tk.Tk()
     root.title("JP NFL Stats")  # Set the window title
-    root.geometry("800x600")
+    root.geometry("1500x900")
 
     # Configure the root window's background color
     root.configure(bg="#f0f0f0")
+    #root.attributes('-fullscreen', True)
+    #root.bind("<Escape>", lambda event: root.attributes('-fullscreen', False))
 
     # Create a frame for the title
     title_frame = tk.Frame(root, bg="#004080", pady=10)

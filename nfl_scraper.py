@@ -53,7 +53,74 @@ team_shorthand_to_full = {
     "WAS": "Washington Commanders"
 }
 
-def scrap_team_offence_page(url6):
+def scrap_team_offence_page(url7):
+    driver = webdriver.Safari()
+
+    driver.get(url7)
+    driver.implicitly_wait(10)
+    
+    html = driver.page_source
+    soup = bs(html, 'html.parser')  
+
+    offense_div = soup.find('div', {'id': 'all_team_stats'})
+    if offense_div:
+        # Now look for the table within the rushing_div
+        table = offense_div.find('table')
+        if not table:
+            print("Table not found within the div")
+            return
+    else:
+        print("Div with id 'all_rushing' not found")
+    
+    header_row = table.find('tr', class_=lambda x: x != 'over_header')
+
+    # Extract the headers from that 'tr'
+    headers = [th.getText().strip() for th in header_row.find_all('th')]
+
+
+    team_index = headers.index("Tm")
+    games_index = headers.index("G")
+    plays_index = headers.index("Ply")
+    passing_attempts_index = headers.index("Att")
+
+
+    att_indices = [i for i, header in enumerate(headers) if header == "Att"]
+    if len(att_indices) > 1:
+        rush_attempts_index = att_indices[1]
+
+    rows = table.find('tbody').find_all('tr')
+    plays_stats = []
+
+    for row in rows[:]:
+        columns = row.find_all('td')
+        if columns:
+            team_name = columns[0].getText().strip()
+            games_played = int(columns[games_index-1].getText().strip())
+            plays = int(columns[plays_index-1].getText().strip())
+            passes = int(columns[passing_attempts_index-1].getText().strip())
+            rushes = int(columns[rush_attempts_index -1].getText().strip())
+
+            plays_per_game = round(plays / games_played, 1)
+            passes_per_game = round(passes / games_played, 1)
+            pass_percentage_per_game = round((passes_per_game / plays_per_game) * 100, 1)
+            rushes_per_game = round(rushes/ games_played, 1)
+            rushes_percentage_per_game = round((rushes_per_game / plays_per_game) * 100, 1)
+
+            plays_stats.append({
+                "Team": team_name, 
+                "Plays/G": str(plays_per_game), 
+                "Pass %/G": str(pass_percentage_per_game), 
+                "Rush %/G": str(rushes_percentage_per_game)
+                })
+   
+            
+    driver.quit()
+
+    return plays_stats
+
+
+
+def scrap_team_rushing_page(url6):
     driver = webdriver.Safari()
 
     driver.get(url6)
@@ -98,7 +165,7 @@ def scrap_team_offence_page(url6):
     # Close the browser after scraping
     driver.quit()
 
-def scrape_team_page(url2):
+def scrape_team_defense_page(url2):
 
     driver = webdriver.Safari()
 
@@ -152,9 +219,9 @@ def scrape_team_page(url2):
             
             plays_stats.append({
                 "Team": team_name, 
-                "Plays/G": str(plays_per_game), 
-                "Pass %/G": str(pass_percentage_per_game), 
-                "Rush %/G": str(rushes_percentage_per_game)
+                "Plays/G AG": str(plays_per_game), 
+                "Pass %/G AG": str(pass_percentage_per_game), 
+                "Rush %/G AG": str(rushes_percentage_per_game)
                 })
 
     # Close the browser
@@ -531,11 +598,11 @@ def combine_rb_stats(rushing_stats, receiving_stats):
     return combined_stats
 
 def main():
-    #team_data = scrape_team_page(url2)
+    #team_data = scrape_team_defense_page(url2)
     #with open('team_data.pkl', 'wb') as file:
     #    pickle.dump(team_data, file)
 
-    scrap_team_offence_page(url6)
+    #scrap_team_rushing_page(url6)
    # scrape_qb_page(url3)
    # scrape_rushing_page(url5)
   #  qb_data = combine_qb_stats(qb_rushing_stats, qb_passing_stats, team_rushing_stats)
@@ -543,7 +610,8 @@ def main():
    # with open('qb_data.pkl', 'wb') as file:
    #     pickle.dump(qb_data, file)
 
-    
+    scrap_team_offence_page(url7)
+    '''
     wr_data = scrape_receiving_page(url4)
     with open('wr_data.pkl', 'wb')as file:
         pickle.dump(wr_data, file)
@@ -557,7 +625,7 @@ def main():
     for stat in rb_combined_data:
         print(stat)
 
-
+    '''
  
 if __name__ == "__main__":
    main()
