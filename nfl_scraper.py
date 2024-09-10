@@ -597,34 +597,61 @@ def combine_rb_stats(rushing_stats, receiving_stats):
 
     return combined_stats
 
+
+def merge_offense_defense(offense_data, defense_data):
+    combined_list = []
+    
+    # Loop through offense data
+    for offense_item in offense_data:
+        team_name = offense_item['Team']
+        
+        # Find the corresponding defense entry
+        matching_defense_item = next((item for item in defense_data if item['Team'] == team_name), None)
+        
+        if matching_defense_item:
+            # Merge the two dictionaries if both exist
+            combined_item = {**offense_item, **matching_defense_item}
+        else:
+            # If no matching defense data, just use offense data
+            combined_item = offense_item
+        
+        combined_list.append(combined_item)
+    
+    return combined_list
+
+
 def main():
-    #team_data = scrape_team_defense_page(url2)
-    #with open('team_data.pkl', 'wb') as file:
-    #    pickle.dump(team_data, file)
-
-    #scrap_team_rushing_page(url6)
-   # scrape_qb_page(url3)
-   # scrape_rushing_page(url5)
-  #  qb_data = combine_qb_stats(qb_rushing_stats, qb_passing_stats, team_rushing_stats)
-
-   # with open('qb_data.pkl', 'wb') as file:
-   #     pickle.dump(qb_data, file)
-
-    scrap_team_offence_page(url7)
     '''
+    #QB DATA
+    scrap_team_rushing_page(url6)
+    scrape_qb_page(url3)
+    scrape_rushing_page(url5)
+    qb_data = combine_qb_stats(qb_rushing_stats, qb_passing_stats, team_rushing_stats)
+
+    with open('qb_data.pkl', 'wb') as file:
+        pickle.dump(qb_data, file)
+    '''
+    '''
+    #TEAM DATA
+    offense_data = scrap_team_offence_page(url7)
+    defense_data = scrape_team_defense_page(url2)
+
+    team_data = merge_offense_defense(offense_data, defense_data)
+    with open('team_data.pkl', 'wb') as file:
+        pickle.dump(team_data, file)
+    '''
+    '''
+    #WR DATA
     wr_data = scrape_receiving_page(url4)
     with open('wr_data.pkl', 'wb')as file:
         pickle.dump(wr_data, file)
 
+    #RB DATA
     rb_data = scrape_rushing_page(url5)
     
     rb_combined_data = combine_rb_stats(rb_data, rb_stats)
     with open('rb_data.pkl', 'wb') as file:
         pickle.dump(rb_combined_data, file)
-
-    for stat in rb_combined_data:
-        print(stat)
-
     '''
  
 if __name__ == "__main__":

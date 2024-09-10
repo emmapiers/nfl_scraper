@@ -46,7 +46,8 @@ def create_ui(team_data, qb_data, wr_data, rb_data):
     style.configure("mystyle.Treeview.Heading", font=('Arial', 14, 'bold'))  # Modify the font of the headings
     style.layout("mystyle.Treeview", [('mystyle.Treeview.treearea', {'sticky': 'nswe'})])  # Remove the borders
 
-    team_columns = ('Team', 'Plays/G', 'Pass %/G', 'Rush %/G')
+    team_columns = ('Team', 'Plays/G', 'Pass %/G', 'Rush %/G', 'Plays/G AG', 'Pass %/G AG', 'Rush %/G AG')
+
     team_tree = ttk.Treeview(team_frame, columns=team_columns, show='headings', style="mystyle.Treeview")
     
     # Create a sorting function for team stats
@@ -68,7 +69,15 @@ def create_ui(team_data, qb_data, wr_data, rb_data):
 
     # Insert team data into the Treeview
     for item in team_data:
-        team_tree.insert('', tk.END, values=(item['Team'], item['Plays/G'], item['Pass %/G'], item['Rush %/G']))
+        team_tree.insert('', tk.END, values=(
+            item['Team'], 
+            item['Plays/G'], 
+            item['Pass %/G'], 
+            item['Rush %/G'], 
+            item.get('Plays/G AG', 'N/A'), 
+            item.get('Pass %/G AG', 'N/A'), 
+            item.get('Rush %/G AG', 'N/A')
+        ))
 
     team_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
