@@ -1,6 +1,7 @@
 import requests 
 import pickle
 from bs4 import BeautifulSoup as bs
+import pandas as pd
 
 from selenium import webdriver
 import time
@@ -108,17 +109,15 @@ def scrap_team_offence_page(url7):
 
             plays_stats.append({
                 "Team": team_name, 
-                "Plays/G": str(plays_per_game), 
-                "Pass %/G": str(pass_percentage_per_game), 
-                "Rush %/G": str(rushes_percentage_per_game)
+                "Plays/G": float(plays_per_game), 
+                "Pass %/G": float(pass_percentage_per_game), 
+                "Rush %/G": float(rushes_percentage_per_game)
                 })
    
             
     driver.quit()
 
     return plays_stats
-
-
 
 def scrap_team_rushing_page(url6):
     driver = webdriver.Safari()
@@ -158,7 +157,7 @@ def scrap_team_rushing_page(url6):
 
         team_rushing_stats.append({
             "Team": team, 
-            "Att": attempts
+            "Att": int(attempts)
         })
 
 
@@ -219,9 +218,9 @@ def scrape_team_defense_page(url2):
             
             plays_stats.append({
                 "Team": team_name, 
-                "Plays/G AG": str(plays_per_game), 
-                "Pass %/G AG": str(pass_percentage_per_game), 
-                "Rush %/G AG": str(rushes_percentage_per_game)
+                "Plays/G AG": float(plays_per_game), 
+                "Pass %/G AG": float(pass_percentage_per_game), 
+                "Rush %/G AG": float(rushes_percentage_per_game)
                 })
 
     # Close the browser
@@ -286,10 +285,10 @@ def scrape_qb_page(url3):
                 qb_passing_stats.append({
                     "Player": players, 
                     "Team": str(team),
-                    "Cmp/G": str(cmp_per_game), 
-                    "Att/G": str(att_per_game), 
-                    "Yds/G": str(yds_per_game), 
-                    "TD/G": str(tds_per_game), 
+                    "Cmp/G": int(cmp_per_game), 
+                    "Att/G": int(att_per_game), 
+                    "Yds/G": int(yds_per_game), 
+                    "TD/G": int(tds_per_game), 
                     "TD%": str(tds_percentage), 
                     "Y/A": str(yards_per_attempt)
                     })
@@ -362,7 +361,7 @@ def scrape_receiving_page(url4):
                 receiving_stats.append({
                     "Player": players, 
                     "Team": str(team),
-                    "Tgt/G": str(targets_per_game), 
+                    "Tgt/G": int(targets_per_game), 
                     "Y/R": str(yards_per_target), 
                     "R/G": str(receptions_per_game), 
                     "Y/G": str(yards_per_game), 
@@ -484,14 +483,14 @@ def combine_qb_stats(qb_rushing_stats, qb_passing_stats, team_rushing_stats):
     all_columns = {
         "Player": "",
         "Team": "",
-        "Cmp/G": "0.0",
-        "Att/G": "0.0", 
-        "Yds/G": "0.0",
-        "TD/G": "0.0",
-        "TD%": "0.0",
-        "Y/A": "0.0", 
-        "Carry %": "0.0", 
-        "Yds/Carry": "0",
+        "Cmp/G": 0,
+        "Att/G": 0, 
+        "Yds/G": 0,
+        "TD/G": 0.0,
+        "TD%": 0.0,
+        "Y/A": 0.0, 
+        "Carry %": 0.0, 
+        "Yds/Carry": 0,
     }
     # Initialize combined stats list
     combined_stats = []
@@ -510,11 +509,11 @@ def combine_qb_stats(qb_rushing_stats, qb_passing_stats, team_rushing_stats):
 
         if player in rushing_dict:
             for key, value in rushing_dict[player].items():
-                combined_stat[key] = value if value is not None else "0.0"
+                combined_stat[key] = value if value is not None else "0"
 
         if player in passing_dict:
             for key, value in passing_dict[player].items():
-                combined_stat[key] = value if value is not None else "0.0"
+                combined_stat[key] = value if value is not None else "0"
 
 
         if player in rushing_dict:
@@ -540,15 +539,15 @@ def combine_rb_stats(rushing_stats, receiving_stats):
     all_columns = {
         "Player": "",
         "Team": "",
-        "Att/G": "0", 
-        "Carry %": "0.0",
-        "Y/Carry": "0", 
-        "TD %": "0",
-        "Tgt/G": "0", 
-        "Y/R": "0", 
-        "R/G": "0", 
-        "Y/G": "0", 
-        "TD/G": "0"
+        "Att/G": 0, 
+        "Carry %": 0.0,
+        "Y/Carry": 0.0, 
+        "TD %": 0.0,
+        "Tgt/G": 0, 
+        "Y/R": 0, 
+        "R/G": 0, 
+        "Y/G": 0, 
+        "TD/G": 0
     }
 
     # Convert rushing_stats and receiving_stats to dictionaries with the player's name as the key
@@ -598,7 +597,7 @@ def combine_rb_stats(rushing_stats, receiving_stats):
     return combined_stats
 
 
-def merge_offense_defense(offense_data, defense_data):
+def combine_team_stats(offense_data, defense_data):
     combined_list = []
     
     # Loop through offense data
@@ -630,17 +629,15 @@ def main():
 
     with open('qb_data.pkl', 'wb') as file:
         pickle.dump(qb_data, file)
-    '''
-    '''
+    
     #TEAM DATA
     offense_data = scrap_team_offence_page(url7)
     defense_data = scrape_team_defense_page(url2)
 
-    team_data = merge_offense_defense(offense_data, defense_data)
+    team_data = combine_team_stats(offense_data, defense_data)
     with open('team_data.pkl', 'wb') as file:
         pickle.dump(team_data, file)
-    '''
-    '''
+ 
     #WR DATA
     wr_data = scrape_receiving_page(url4)
     with open('wr_data.pkl', 'wb')as file:
@@ -652,7 +649,84 @@ def main():
     rb_combined_data = combine_rb_stats(rb_data, rb_stats)
     with open('rb_data.pkl', 'wb') as file:
         pickle.dump(rb_combined_data, file)
-    '''
+   '''
  
+def excel_maker():
+    
+    #QB DATA
+    scrap_team_rushing_page(url6)
+    scrape_qb_page(url3)
+    scrape_rushing_page(url5)
+    qb_data = combine_qb_stats(qb_rushing_stats, qb_passing_stats, team_rushing_stats)
+
+    df_qb = pd.DataFrame(qb_data)
+    df_qb['TD%'] = pd.to_numeric(df_qb['TD%'], errors='coerce')
+    df_qb['Y/A'] = pd.to_numeric(df_qb['Y/A'], errors='coerce')
+    df_qb['Carry %'] = pd.to_numeric(df_qb['Carry %'], errors='coerce')
+    df_qb['Yds/Carry'] = pd.to_numeric(df_qb['Yds/Carry'], errors='coerce')
+    df_qb['Att'] = pd.to_numeric(df_qb['Att'], errors='coerce')
+    
+    df_qb.fillna(0, inplace=True)
+    
+    #TEAM DATA
+    offense_data = scrap_team_offence_page(url7)
+    defense_data = scrape_team_defense_page(url2)
+
+    team_data = combine_team_stats(offense_data, defense_data)
+    
+    df_team = pd.DataFrame(team_data)
+
+    df_team['Plays/G'] = pd.to_numeric(df_team['Plays/G'], errors='coerce')
+    df_team['Pass %/G'] = pd.to_numeric(df_team['Pass %/G'], errors='coerce')
+    df_team['Rush %/G'] = pd.to_numeric(df_team['Rush %/G'], errors='coerce')
+    df_team['Plays/G AG'] = pd.to_numeric(df_team['Plays/G AG'], errors='coerce')
+    df_team['Pass %/G AG'] = pd.to_numeric(df_team['Pass %/G AG'], errors='coerce')
+    df_team['Rush %/G AG'] = pd.to_numeric(df_team['Rush %/G AG'], errors='coerce')
+
+    df_team.fillna(0, inplace=True)
+
+    #WR DATA
+    wr_data = scrape_receiving_page(url4)
+    df_wr = pd.DataFrame(wr_data)
+
+    df_wr['Tgt/G'] = pd.to_numeric(df_wr['Tgt/G'], errors='coerce')
+    df_wr['Y/R'] = pd.to_numeric(df_wr['Y/R'], errors='coerce')
+    df_wr['R/G'] = pd.to_numeric(df_wr['R/G'], errors='coerce')
+    df_wr['Y/G'] = pd.to_numeric(df_wr['Y/G'], errors='coerce')
+    df_wr['TD/G'] = pd.to_numeric(df_wr['TD/G'], errors='coerce')
+
+    df_wr.fillna(0, inplace=True)
+
+    #RB DATA
+    rb_single_data = scrape_rushing_page(url5)
+    
+    rb_data = combine_rb_stats(rb_single_data, rb_stats)
+    df_rb = pd.DataFrame(rb_data)
+
+    df_rb['Att/G'] = pd.to_numeric(df_rb['Att/G'], errors='coerce')
+    df_rb['Carry %'] = pd.to_numeric(df_rb['Carry %'], errors='coerce')
+    df_rb['Y/Carry'] = pd.to_numeric(df_rb['Y/Carry'], errors='coerce')
+    df_rb['TD %'] = pd.to_numeric(df_rb['TD %'], errors='coerce')
+    df_rb['Tgt/G'] = pd.to_numeric(df_rb['Tgt/G'], errors='coerce')
+    df_rb['Y/R'] = pd.to_numeric(df_rb['Y/R'], errors='coerce')
+    df_rb['R/G'] = pd.to_numeric(df_rb['R/G'], errors='coerce')
+    df_rb['Y/G'] = pd.to_numeric(df_rb['Y/G'], errors='coerce')
+    df_rb['TD/G'] = pd.to_numeric(df_rb['TD/G'], errors='coerce')
+    df_rb['Att'] = pd.to_numeric(df_rb['Att'], errors='coerce')
+ 
+    df_rb.fillna(0, inplace=True)
+
+
+
+    with pd.ExcelWriter("nfl_stats.xlsx", engine="xlsxwriter") as writer:
+        # Write each DataFrame to a different sheet/tab
+        df_team.to_excel(writer, sheet_name="Team Stats", index=False)
+        df_qb.to_excel(writer, sheet_name="QB Stats", index=False)
+        df_wr.to_excel(writer, sheet_name="WR Stats", index=False)
+        df_rb.to_excel(writer, sheet_name="RB Stats", index=False)
+
+
+
 if __name__ == "__main__":
    main()
+   excel_maker()
