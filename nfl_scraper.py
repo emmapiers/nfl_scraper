@@ -736,8 +736,28 @@ def make_qb_sheet():
     df_final.rename(columns={'Team_opponent': 'Opponent'}, inplace=True)
     
     return df_final
-
 def make_team_sheet():
+    #TEAM DATA
+    offense_data = scrap_team_offence_page(url7)
+    defense_data = scrape_team_defense_page(url2)
+
+    team_data = combine_team_stats(offense_data, defense_data)
+    
+    df_t = pd.DataFrame(team_data)
+    
+
+    df_t['Plays/G'] = pd.to_numeric(df_t['Plays/G'], errors='coerce')
+    df_t['Pass %/G'] = pd.to_numeric(df_t['Pass %/G'], errors='coerce')
+    df_t['Rush %/G'] = pd.to_numeric(df_t['Rush %/G'], errors='coerce')
+    df_t['Plays/G AG'] = pd.to_numeric(df_t['Plays/G AG'], errors='coerce')
+    df_t['Pass %/G AG'] = pd.to_numeric(df_t['Pass %/G AG'], errors='coerce')
+    df_t['Rush %/G AG'] = pd.to_numeric(df_t['Rush %/G AG'], errors='coerce')
+
+    df_t.fillna(0, inplace=True)
+
+    return df_t
+
+def make_full_team_sheet():
     #TEAM DATA
     offense_data = scrap_team_offence_page(url7)
     defense_data = scrape_team_defense_page(url2)
@@ -901,7 +921,7 @@ def excel_maker():
 
     #Make dataFrames
     df_qb = make_qb_sheet()
-    df_team = make_team_sheet()
+    df_team = make_full_team_sheet()
     df_wr = make_wr_sheet()
     df_rb = make_rb_sheet()
 
