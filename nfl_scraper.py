@@ -303,19 +303,20 @@ def scrape_qb_page(url3):
                 tds = columns[tds_index -1].getText().strip()
                 tds_percentage = columns[tds_percentage_index -1].getText().strip()
                 yards_per_attempt = columns[yards_per_attempt_index -1].getText().strip()
-
+                
                 cmp_per_game = round(int(completions) / games_played, 1)
                 att_per_game = round(int(attempts) / games_played, 1)
                 yds_per_game = round(int(yards) / games_played, 1)
                 tds_per_game = round(int(tds) / games_played, 1)
+
             
                 qb_passing_stats.append({
                     "Player": players, 
                     "Team": str(team),
-                    "Cmp/G": int(cmp_per_game), 
-                    "Att/G": int(att_per_game), 
-                    "Yds/G": int(yds_per_game), 
-                    "TD/G": int(tds_per_game), 
+                    "Cmp/G": str(cmp_per_game), 
+                    "Att/G": str(att_per_game), 
+                    "Yds/G": str(yds_per_game), 
+                    "TD/G": str(tds_per_game), 
                     "TD%": str(tds_percentage), 
                     "Y/A": str(yards_per_attempt)
                     })
@@ -388,7 +389,7 @@ def scrape_receiving_page(url4):
                 receiving_stats.append({
                     "Player": players, 
                     "Team": str(team),
-                    "Tgt/G": int(targets_per_game), 
+                    "Tgt/G": str(targets_per_game), 
                     "Y/R": str(yards_per_target), 
                     "R/G": str(receptions_per_game), 
                     "Y/G": str(yards_per_game), 
@@ -536,7 +537,8 @@ def combine_qb_stats(qb_rushing_stats, qb_passing_stats, team_rushing_stats):
 
         if player in rushing_dict:
             for key, value in rushing_dict[player].items():
-                combined_stat[key] = value if value is not None else "0"
+                if key != "Att":
+                    combined_stat[key] = value if value is not None else "0"
 
         if player in passing_dict:
             for key, value in passing_dict[player].items():
@@ -595,10 +597,13 @@ def combine_rb_stats(rushing_stats, receiving_stats):
         all_players = set(rushing_dict.keys()).union(set(receiving_dict.keys()))
 
         if player in rushing_dict:
-            combined_stat.update(rushing_dict[player])  # Update with player's rushing stats
+            for key, value in rushing_dict[player].items():
+                if key != "Att":  # Skip the 'Att' key to avoid adding it to combined_stat
+                    combined_stat[key] = value if value is not None else 0
 
         if player in receiving_dict:
-            combined_stat.update(receiving_dict[player])  # Update with player's receiving stats
+            for key, value in receiving_dict[player].items():
+                combined_stat[key] = value if value is not None else 0
 
         # If the player has rushing stats, calculate Carry % (Player's Att / Team's Att)
         if player in rushing_dict:
@@ -674,7 +679,8 @@ def main():
     rb_combined_data = combine_rb_stats(rb_data, rb_stats)
     with open('rb_data.pkl', 'wb') as file:
         pickle.dump(rb_combined_data, file)
-   '''
+    '''
+   
  
 def make_qb_sheet():
     #QB DATA
@@ -684,11 +690,14 @@ def make_qb_sheet():
     qb_data = combine_qb_stats(qb_rushing_stats, qb_passing_stats, team_rushing_stats)
 
     df_qb = pd.DataFrame(qb_data)
+    df_qb['Cmp/G'] = pd.to_numeric(df_qb['TD%'], errors='coerce')
+    df_qb['Att/G'] = pd.to_numeric(df_qb['Y/A'], errors='coerce')
+    df_qb['Yds/G'] = pd.to_numeric(df_qb['Carry %'], errors='coerce')
+    df_qb['TD/G'] = pd.to_numeric(df_qb['Yds/Carry'], errors='coerce')
     df_qb['TD%'] = pd.to_numeric(df_qb['TD%'], errors='coerce')
     df_qb['Y/A'] = pd.to_numeric(df_qb['Y/A'], errors='coerce')
     df_qb['Carry %'] = pd.to_numeric(df_qb['Carry %'], errors='coerce')
     df_qb['Yds/Carry'] = pd.to_numeric(df_qb['Yds/Carry'], errors='coerce')
-    df_qb['Att'] = pd.to_numeric(df_qb['Att'], errors='coerce')
     
     df_qb.fillna(0, inplace=True)
 
@@ -735,19 +744,53 @@ def make_team_sheet():
 
     team_data = combine_team_stats(offense_data, defense_data)
     
-    df_team = pd.DataFrame(team_data)
+    df_t = pd.DataFrame(team_data)
+    
 
-    df_team['Plays/G'] = pd.to_numeric(df_team['Plays/G'], errors='coerce')
-    df_team['Pass %/G'] = pd.to_numeric(df_team['Pass %/G'], errors='coerce')
-    df_team['Rush %/G'] = pd.to_numeric(df_team['Rush %/G'], errors='coerce')
-    df_team['Plays/G AG'] = pd.to_numeric(df_team['Plays/G AG'], errors='coerce')
-    df_team['Pass %/G AG'] = pd.to_numeric(df_team['Pass %/G AG'], errors='coerce')
-    df_team['Rush %/G AG'] = pd.to_numeric(df_team['Rush %/G AG'], errors='coerce')
+    df_t['Plays/G'] = pd.to_numeric(df_t['Plays/G'], errors='coerce')
+    df_t['Pass %/G'] = pd.to_numeric(df_t['Pass %/G'], errors='coerce')
+    df_t['Rush %/G'] = pd.to_numeric(df_t['Rush %/G'], errors='coerce')
+    df_t['Plays/G AG'] = pd.to_numeric(df_t['Plays/G AG'], errors='coerce')
+    df_t['Pass %/G AG'] = pd.to_numeric(df_t['Pass %/G AG'], errors='coerce')
+    df_t['Rush %/G AG'] = pd.to_numeric(df_t['Rush %/G AG'], errors='coerce')
 
-    df_team.fillna(0, inplace=True)
+    df_t.fillna(0, inplace=True)
 
-    return df_team
+    games_for_cur_round = find_matchups()
 
+    df_team = df_t.copy()
+
+   # Merge QB stats where QB team matches Home Team Shorthand
+    df_t = pd.merge(df_t, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                          left_on='Team', right_on='Home Team Shorthand', how='left')
+
+    # Merge QB stats where QB team matches Away Team Shorthand
+    df_t = pd.merge(df_t, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                          left_on='Team', right_on='Away Team Shorthand', how='left')
+    
+    # Combine 'Home Team Shorthand_x' with 'Away Team Shorthand_y' and 'Away Team Shorthand_x' with 'Home Team Shorthand_y'
+    df_t['Home Team Shorthand'] = np.where(df_t['Home Team Shorthand_x'].notna(), 
+                                            df_t['Home Team Shorthand_x'], df_t['Home Team Shorthand_y'])
+
+    df_t['Away Team Shorthand'] = np.where(df_t['Away Team Shorthand_x'].notna(), 
+                                            df_t['Away Team Shorthand_x'], df_t['Away Team Shorthand_y'])
+
+    # Drop the old _x and _y columns
+    df_t = df_t.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
+                                'Away Team Shorthand_x', 'Away Team Shorthand_y'])
+    
+    # Find the opponent team shorthand (the team that doesn't match the QB's team)
+    df_t['Opponent Team Shorthand'] = np.where(df_t['Home Team Shorthand'] == df_t['Team'],
+                                                df_t['Away Team Shorthand'],
+                                                df_t['Home Team Shorthand'])
+
+    # Merge with team stats of the opponent
+    df_final = pd.merge(df_t, df_team, left_on='Opponent Team Shorthand', right_on='Team', how='left', suffixes=('', '_opponent'))
+
+    df_final = df_final.drop(columns=['Home Team Shorthand', 'Away Team Shorthand', 'Opponent Team Shorthand'])
+    df_final.rename(columns={'Team_opponent': 'Opponent'}, inplace=True)
+    
+    return df_final
 
 def make_wr_sheet():
     #WR DATA
@@ -814,7 +857,7 @@ def make_rb_sheet():
     df_rb['R/G'] = pd.to_numeric(df_rb['R/G'], errors='coerce')
     df_rb['Y/G'] = pd.to_numeric(df_rb['Y/G'], errors='coerce')
     df_rb['TD/G'] = pd.to_numeric(df_rb['TD/G'], errors='coerce')
-    df_rb['Att'] = pd.to_numeric(df_rb['Att'], errors='coerce')
+
  
     df_rb.fillna(0, inplace=True)
 
@@ -872,7 +915,6 @@ def excel_maker():
         df_rb.to_excel(writer, sheet_name="RB Stats", index=False)
 
 def find_matchups():
- 
 
     schedule_file = "nfl-2024-UTC.xlsx"
     schedule = pd.read_excel(schedule_file)
