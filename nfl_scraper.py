@@ -2,6 +2,9 @@ import requests
 import pickle
 from bs4 import BeautifulSoup as bs
 import pandas as pd
+import numpy as np
+
+from datetime import datetime
 
 from selenium import webdriver
 import time
@@ -12,12 +15,6 @@ url4 = "https://www.pro-football-reference.com/years/2023/receiving.htm"
 url5 = "https://www.pro-football-reference.com/years/2023/rushing.htm"
 url6 = "https://www.pro-football-reference.com/years/2023/#all_rushing"
 url7 = "https://www.pro-football-reference.com/years/2023/#all_team_stats"
-
-
-rb_stats = []
-qb_rushing_stats = []
-team_rushing_stats = []
-qb_passing_stats = []
 
 team_shorthand_to_full = {
     "ARI": "Arizona Cardinals",
@@ -54,7 +51,35 @@ team_shorthand_to_full = {
     "WAS": "Washington Commanders"
 }
 
+round_to_date = {
+    #Weeks start on Tuesdays and end on Mondays
+    1: ('2024-09-05', '2024-09-09'), 
+    2: ('2024-09-10', '2024-09-16'), 
+    3: ('2024-09-17', '2024-09-23'), 
+    4: ('2024-09-24', '2024-09-30'), 
+    5: ('2024-10-01', '2024-10-07'), 
+    6: ('2024-10-08', '2024-10-14'), 
+    7: ('2024-10-15', '2024-10-21'), 
+    8: ('2024-10-22', '2024-10-28'), 
+    9: ('2024-10-29', '2024-11-04'), 
+    10: ('2024-11-05', '2024-11-11'), 
+    11: ('2024-11-12', '2024-11-18'), 
+    12: ('2024-11-19', '2024-11-25'), 
+    13: ('2024-11-26', '2024-12-02'), 
+    14: ('2024-12-03', '2024-12-09'), 
+    15: ('2024-12-10', '2024-12-16'), 
+    16: ('2024-12-17', '2024-12-23'), 
+    17: ('2024-12-24', '2024-12-30'), 
+    18: ('2025-12-31', '2025-01-05'), 
+}
+
+rb_stats = []
+qb_rushing_stats = []
+team_rushing_stats = []
+qb_passing_stats = []
+
 def scrap_team_offence_page(url7):
+    full_to_shorthand = {v: k for k, v in team_shorthand_to_full.items()}
     driver = webdriver.Safari()
 
     driver.get(url7)
@@ -78,8 +103,6 @@ def scrap_team_offence_page(url7):
     # Extract the headers from that 'tr'
     headers = [th.getText().strip() for th in header_row.find_all('th')]
 
-
-    team_index = headers.index("Tm")
     games_index = headers.index("G")
     plays_index = headers.index("Ply")
     passing_attempts_index = headers.index("Att")
@@ -96,6 +119,8 @@ def scrap_team_offence_page(url7):
         columns = row.find_all('td')
         if columns:
             team_name = columns[0].getText().strip()
+
+            shorthand_name = full_to_shorthand.get(team_name, team_name)  # Use full name if shorthand not found
             games_played = int(columns[games_index-1].getText().strip())
             plays = int(columns[plays_index-1].getText().strip())
             passes = int(columns[passing_attempts_index-1].getText().strip())
@@ -108,7 +133,7 @@ def scrap_team_offence_page(url7):
             rushes_percentage_per_game = round((rushes_per_game / plays_per_game) * 100, 1)
 
             plays_stats.append({
-                "Team": team_name, 
+                "Team": shorthand_name, 
                 "Plays/G": float(plays_per_game), 
                 "Pass %/G": float(pass_percentage_per_game), 
                 "Rush %/G": float(rushes_percentage_per_game)
@@ -165,7 +190,7 @@ def scrap_team_rushing_page(url6):
     driver.quit()
 
 def scrape_team_defense_page(url2):
-
+    full_to_shorthand = {v: k for k, v in team_shorthand_to_full.items()}
     driver = webdriver.Safari()
 
     driver.get(url2)
@@ -199,6 +224,8 @@ def scrape_team_defense_page(url2):
         columns = row.find_all('td')
         if columns:
             team_name = columns[0].getText().strip()
+
+            shorthand_name = full_to_shorthand.get(team_name, team_name)
             games_played = columns[games_index-1].getText().strip()
             plays = columns[plays_index-1].getText().strip()
             passes = columns[passes_index-1].getText().strip()
@@ -217,7 +244,7 @@ def scrape_team_defense_page(url2):
             rushes_percentage_per_game = round((rushes_per_game / plays_per_game) * 100, 1)
             
             plays_stats.append({
-                "Team": team_name, 
+                "Team": shorthand_name, 
                 "Plays/G AG": float(plays_per_game), 
                 "Pass %/G AG": float(pass_percentage_per_game), 
                 "Rush %/G AG": float(rushes_percentage_per_game)
@@ -596,7 +623,6 @@ def combine_rb_stats(rushing_stats, receiving_stats):
 
     return combined_stats
 
-
 def combine_team_stats(offense_data, defense_data):
     combined_list = []
     
@@ -617,7 +643,6 @@ def combine_team_stats(offense_data, defense_data):
         combined_list.append(combined_item)
     
     return combined_list
-
 
 def main():
     '''
@@ -651,8 +676,7 @@ def main():
         pickle.dump(rb_combined_data, file)
    '''
  
-def excel_maker():
-    
+def make_qb_sheet():
     #QB DATA
     scrap_team_rushing_page(url6)
     scrape_qb_page(url3)
@@ -667,7 +691,44 @@ def excel_maker():
     df_qb['Att'] = pd.to_numeric(df_qb['Att'], errors='coerce')
     
     df_qb.fillna(0, inplace=True)
+
+    games_for_cur_round = find_matchups()
+
+    df_team = make_team_sheet()
+
+   # Merge QB stats where QB team matches Home Team Shorthand
+    df_qb = pd.merge(df_qb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                          left_on='Team', right_on='Home Team Shorthand', how='left')
+
+    # Merge QB stats where QB team matches Away Team Shorthand
+    df_qb = pd.merge(df_qb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                          left_on='Team', right_on='Away Team Shorthand', how='left')
     
+    # Combine 'Home Team Shorthand_x' with 'Away Team Shorthand_y' and 'Away Team Shorthand_x' with 'Home Team Shorthand_y'
+    df_qb['Home Team Shorthand'] = np.where(df_qb['Home Team Shorthand_x'].notna(), 
+                                            df_qb['Home Team Shorthand_x'], df_qb['Home Team Shorthand_y'])
+
+    df_qb['Away Team Shorthand'] = np.where(df_qb['Away Team Shorthand_x'].notna(), 
+                                            df_qb['Away Team Shorthand_x'], df_qb['Away Team Shorthand_y'])
+
+    # Drop the old _x and _y columns
+    df_qb = df_qb.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
+                                'Away Team Shorthand_x', 'Away Team Shorthand_y'])
+    
+    # Find the opponent team shorthand (the team that doesn't match the QB's team)
+    df_qb['Opponent Team Shorthand'] = np.where(df_qb['Home Team Shorthand'] == df_qb['Team'],
+                                                df_qb['Away Team Shorthand'],
+                                                df_qb['Home Team Shorthand'])
+
+    # Merge with team stats of the opponent
+    df_final = pd.merge(df_qb, df_team, left_on='Opponent Team Shorthand', right_on='Team', how='left', suffixes=('', '_opponent'))
+
+    df_final = df_final.drop(columns=['Home Team Shorthand', 'Away Team Shorthand', 'Opponent Team Shorthand'])
+    df_final.rename(columns={'Team_opponent': 'Opponent'}, inplace=True)
+    
+    return df_final
+
+def make_team_sheet():
     #TEAM DATA
     offense_data = scrap_team_offence_page(url7)
     defense_data = scrape_team_defense_page(url2)
@@ -685,6 +746,10 @@ def excel_maker():
 
     df_team.fillna(0, inplace=True)
 
+    return df_team
+
+
+def make_wr_sheet():
     #WR DATA
     wr_data = scrape_receiving_page(url4)
     df_wr = pd.DataFrame(wr_data)
@@ -697,6 +762,43 @@ def excel_maker():
 
     df_wr.fillna(0, inplace=True)
 
+    games_for_cur_round = find_matchups()
+
+    df_team = make_team_sheet()
+
+   # Merge QB stats where QB team matches Home Team Shorthand
+    df_wr = pd.merge(df_wr, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                          left_on='Team', right_on='Home Team Shorthand', how='left')
+
+    # Merge QB stats where QB team matches Away Team Shorthand
+    df_wr = pd.merge(df_wr, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                          left_on='Team', right_on='Away Team Shorthand', how='left')
+    
+    # Combine 'Home Team Shorthand_x' with 'Away Team Shorthand_y' and 'Away Team Shorthand_x' with 'Home Team Shorthand_y'
+    df_wr['Home Team Shorthand'] = np.where(df_wr['Home Team Shorthand_x'].notna(), 
+                                            df_wr['Home Team Shorthand_x'], df_wr['Home Team Shorthand_y'])
+
+    df_wr['Away Team Shorthand'] = np.where(df_wr['Away Team Shorthand_x'].notna(), 
+                                            df_wr['Away Team Shorthand_x'], df_wr['Away Team Shorthand_y'])
+
+    # Drop the old _x and _y columns
+    df_wr = df_wr.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
+                                'Away Team Shorthand_x', 'Away Team Shorthand_y'])
+    
+    # Find the opponent team shorthand (the team that doesn't match the QB's team)
+    df_wr['Opponent Team Shorthand'] = np.where(df_wr['Home Team Shorthand'] == df_wr['Team'],
+                                                df_wr['Away Team Shorthand'],
+                                                df_wr['Home Team Shorthand'])
+
+    # Merge with team stats of the opponent
+    df_final = pd.merge(df_wr, df_team, left_on='Opponent Team Shorthand', right_on='Team', how='left', suffixes=('', '_opponent'))
+
+    df_final = df_final.drop(columns=['Home Team Shorthand', 'Away Team Shorthand', 'Opponent Team Shorthand'])
+    df_final.rename(columns={'Team_opponent': 'Opponent'}, inplace=True)
+    
+    return df_final
+
+def make_rb_sheet():
     #RB DATA
     rb_single_data = scrape_rushing_page(url5)
     
@@ -716,8 +818,52 @@ def excel_maker():
  
     df_rb.fillna(0, inplace=True)
 
+    games_for_cur_round = find_matchups()
+
+    df_team = make_team_sheet()
+
+   # Merge QB stats where QB team matches Home Team Shorthand
+    df_rb = pd.merge(df_rb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                          left_on='Team', right_on='Home Team Shorthand', how='left')
+
+    # Merge QB stats where QB team matches Away Team Shorthand
+    df_rb = pd.merge(df_rb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                          left_on='Team', right_on='Away Team Shorthand', how='left')
+    
+    # Combine 'Home Team Shorthand_x' with 'Away Team Shorthand_y' and 'Away Team Shorthand_x' with 'Home Team Shorthand_y'
+    df_rb['Home Team Shorthand'] = np.where(df_rb['Home Team Shorthand_x'].notna(), 
+                                            df_rb['Home Team Shorthand_x'], df_rb['Home Team Shorthand_y'])
+
+    df_rb['Away Team Shorthand'] = np.where(df_rb['Away Team Shorthand_x'].notna(), 
+                                            df_rb['Away Team Shorthand_x'], df_rb['Away Team Shorthand_y'])
+
+    # Drop the old _x and _y columns
+    df_rb = df_rb.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
+                                'Away Team Shorthand_x', 'Away Team Shorthand_y'])
+    
+    # Find the opponent team shorthand (the team that doesn't match the QB's team)
+    df_rb['Opponent Team Shorthand'] = np.where(df_rb['Home Team Shorthand'] == df_rb['Team'],
+                                                df_rb['Away Team Shorthand'],
+                                                df_rb['Home Team Shorthand'])
+
+    # Merge with team stats of the opponent
+    df_final = pd.merge(df_rb, df_team, left_on='Opponent Team Shorthand', right_on='Team', how='left', suffixes=('', '_opponent'))
+
+    df_final = df_final.drop(columns=['Home Team Shorthand', 'Away Team Shorthand', 'Opponent Team Shorthand'])
+    df_final.rename(columns={'Team_opponent': 'Opponent'}, inplace=True)
+    
+    return df_final
+
+def excel_maker():
+
+    #Make dataFrames
+    df_qb = make_qb_sheet()
+    df_team = make_team_sheet()
+    df_wr = make_wr_sheet()
+    df_rb = make_rb_sheet()
 
 
+    #Make excel sheet
     with pd.ExcelWriter("nfl_stats.xlsx", engine="xlsxwriter") as writer:
         # Write each DataFrame to a different sheet/tab
         df_team.to_excel(writer, sheet_name="Team Stats", index=False)
@@ -725,8 +871,38 @@ def excel_maker():
         df_wr.to_excel(writer, sheet_name="WR Stats", index=False)
         df_rb.to_excel(writer, sheet_name="RB Stats", index=False)
 
+def find_matchups():
+ 
+
+    schedule_file = "nfl-2024-UTC.xlsx"
+    schedule = pd.read_excel(schedule_file)
+    
+    full_to_shorthand = {v: k for k, v in team_shorthand_to_full.items()}
+
+    # Assuming 'Home Team' and 'Away Team' columns contain the full team names
+    schedule['Home Team Shorthand'] = schedule['Home Team'].map(full_to_shorthand)
+    schedule['Away Team Shorthand'] = schedule['Away Team'].map(full_to_shorthand)
+
+
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    current_round = get_round_by_date(current_date)
+
+   # print(f"Current date: {current_date}, Current round: {current_round}")
+
+    games_for_cur_round = schedule[schedule['Round Number'] == current_round]
+
+    return games_for_cur_round
+
+def get_round_by_date(date_str):
+    input_date = datetime.strptime(date_str, '%Y-%m-%d')
+    for round_num, (start_date_str, end_date_str) in round_to_date.items():
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+        if start_date <= input_date <= end_date:
+            return round_num
+    return None
 
 
 if __name__ == "__main__":
-   main()
+   #main()
    excel_maker()
