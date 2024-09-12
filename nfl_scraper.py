@@ -8,6 +8,7 @@ from datetime import datetime
 
 from selenium import webdriver
 import time
+import re
 
 url2 = "https://www.pro-football-reference.com/years/2023/opp.htm"
 url3 = "https://www.pro-football-reference.com/years/2023/passing.htm"
@@ -15,6 +16,8 @@ url4 = "https://www.pro-football-reference.com/years/2023/receiving.htm"
 url5 = "https://www.pro-football-reference.com/years/2023/rushing.htm"
 url6 = "https://www.pro-football-reference.com/years/2023/#all_rushing"
 url7 = "https://www.pro-football-reference.com/years/2023/#all_team_stats"
+url8 = "https://www.fantasypros.com/nfl/advanced-stats-wr.php?year=2023"
+url9 = "https://www.fantasypros.com/nfl/advanced-stats-te.php?year=2023"
 
 team_shorthand_to_full = {
     "ARI": "Arizona Cardinals",
@@ -326,10 +329,66 @@ def scrape_qb_page(url3):
 
 
     return qb_passing_stats
+
+def scrape_target_percentage(url_wr, url_te):
+    # WR
+    response = requests.get(url_wr)
+    soup = bs(response.content, 'html.parser')
+
+    # Find the table with id 'data'
+    table = soup.find('table', {'id': 'data'})
+    player_data = []
+
+    if table:
+        headers = [th.get_text(strip=True) for th in table.find_all('th')]
+
+        # Find the index of 'TM %' column
+        tm_percentage_index = headers.index("% TM")
+
+        # Iterate through rows and extract data for 'TM %' column
+        for row in table.find_all('tr')[1:]:  # Skip header row
+            columns = row.find_all('td')
+            if columns:
+                player = columns[1].get_text(strip=True)
+                cleaned_player = re.sub(r'\(.*?\)', '', player).strip()  # Clean player name
+                tm_percentage = columns[tm_percentage_index].get_text(strip=True)
+                player_data.append({
+                    "Player": cleaned_player,
+                    "Position": 'WR',
+                    "TM %": tm_percentage
+                })
+    # TE
+    response = requests.get(url_te)
+    soup = bs(response.content, 'html.parser')
+
+    # Find the table with id 'data'
+    table = soup.find('table', {'id': 'data'})
     
+
+    if table:
+        headers = [th.get_text(strip=True) for th in table.find_all('th')]
+
+        # Find the index of 'TM %' column
+        tm_percentage_index = headers.index("% TM")
+
+        # Iterate through rows and extract data for 'TM %' column
+        for row in table.find_all('tr')[1:]:  # Skip header row
+            columns = row.find_all('td')
+            if columns:
+                player = columns[1].get_text(strip=True)
+                cleaned_player = re.sub(r'\(.*?\)', '', player).strip()  # Clean player name
+                tm_percentage = columns[tm_percentage_index].get_text(strip=True)
+                player_data.append({
+                    "Player": cleaned_player,
+                    "Position": 'TE',
+                    "TM %": tm_percentage
+                })
+    
+
+    return player_data
+  
 def scrape_receiving_page(url4):
     driver = webdriver.Safari()
-
 
     driver.get(url4)
     driver.implicitly_wait(10)
@@ -371,6 +430,7 @@ def scrape_receiving_page(url4):
 
 
             if position in ["WR", "TE"]:
+                
                 team = columns[team_index-1].getText().strip()
                 games_played = columns[games_index-1].getText().strip()
                 targets_per_game = columns[targets_index -1].getText().strip()
@@ -389,6 +449,7 @@ def scrape_receiving_page(url4):
                 receiving_stats.append({
                     "Player": players, 
                     "Team": str(team),
+                    "Position": str(position),
                     "Tgt/G": str(targets_per_game), 
                     "Y/R": str(yards_per_target), 
                     "R/G": str(receptions_per_game), 
@@ -427,7 +488,107 @@ def scrape_receiving_page(url4):
 
 
     return receiving_stats
+
+def combine_wr_te_stats():
+    # Scrape TM % for WR and TE
+    wr_te_tm_data = scrape_target_percentage(url8, url9)
+
+    receiving_data = scrape_receiving_page(url4)
+
+    all_columns = {
+        "Player": "",
+        "Team": "",
+        "Position": "",
+        "Tgt/G": 0.0, 
+        "Y/R": 0.0,
+        "R/G": 0.0, 
+        "Y/G": 0.0, 
+        "TD/G": 0.0,
+        "TM %": 0.0  # Default value for target percentage
+    }
+    # Merge TM % with receiving stats based on Player name
+    combined_stats = []
+    # Normalize player names and exclude unwanted players
+    tm_percentage_dict = {}
+    for stat in wr_te_tm_data:
+        normalized_name = normalize_player_name(stat['Player'])
+        if normalized_name is not None:
+            tm_percentage_dict[normalized_name] = stat
     
+    receiving_dict = {}
+    for stat in receiving_data:
+        normalized_name = normalize_player_name(stat['Player'])
+        if normalized_name is not None:
+            receiving_dict[normalized_name] = stat
+
+    # Get all unique player names from both datasets
+    all_players = set(tm_percentage_dict.keys()).union(set(receiving_dict.keys()))
+    
+
+    # Combine stats for each player
+    for player in all_players:
+        # Start with a base dictionary filled with default values
+        combined_stat = all_columns.copy()
+        combined_stat["Player"] = player  # Set the player's name
+
+        # Add receiving stats if available
+        if player in receiving_dict:
+            for key, value in receiving_dict[player].items():
+                combined_stat[key] = value if value is not None else 0
+
+        # Add TM % if available
+        if player in tm_percentage_dict:
+            combined_stat["TM %"] = convert_tm_percentage(tm_percentage_dict[player].get("TM %", "N/A"))
+            combined_stat["Position"] = tm_percentage_dict[player].get("Position", "")
+
+        # Add the combined stat to the list
+        combined_stats.append(combined_stat)
+
+    return combined_stats
+
+def convert_tm_percentage(value):
+    # Check if the value contains a % and convert to float
+    if isinstance(value, str) and "%" in value:
+        return float(value.replace("%", "").strip())
+    return value  # Return the value as-is if it's already correct
+
+def normalize_player_name(player_name):
+    # Standardize specific player names
+    name_corrections = {
+        "DJ Chark Jr.": "DJ Chark",
+        "Scotty Miller": "Scott Miller",
+        "Deebo Samuel Sr.": "Deebo Samuel",
+        "Mecole Hardman Jr.": "Mecole Hardman",
+        "Steven Sims Jr.": "Steven Sims",
+        "Trent Sherfield Sr.": "Trent Sherfield",
+        "James Proche II": "James Proche",
+        "Gabe Davis": "Gabriel Davis",
+        "Ray-Ray McCloud III": "Ray-Ray McCloud",
+        "DeMario Douglas": "Demario Douglas",
+        "Andrew Beck": None,
+        "DK Metcalf": "D.K. Metcalf",
+        "Chig Okonkwo": "Chigoziem Okonkwo",
+        "Donald Parham Jr.": "Donald Parham",
+        "Calvin Austin III": "Calvin Austin",
+        "Taysom Hill": None,
+        "John Metchie III": "John Metchie",
+        "Allen Robinson II": "Allen Robinson",
+        "Marvin Mims Jr.": "Marvin Mims",
+        "Drew Ogletree": "Andrew Ogletree",
+        "DJ Moore": "David Moore", 
+        "Richie James Jr.": "Richie James", 
+        "Marvin Jones Jr.": "Marvin Jones", 
+        "Joshua Palmer": "Josh Palmer"
+    }
+    if player_name in name_corrections:
+        normalized_name = name_corrections[player_name]
+    else:
+        normalized_name = player_name
+
+    return normalized_name
+
+
+
 def scrape_rushing_page(url5):
     # NEED STATS FROM RB_STATS
     driver = webdriver.Safari()
@@ -736,6 +897,7 @@ def make_qb_sheet():
     df_final.rename(columns={'Team_opponent': 'Opponent'}, inplace=True)
     
     return df_final
+
 def make_team_sheet():
     #TEAM DATA
     offense_data = scrap_team_offence_page(url7)
@@ -814,9 +976,11 @@ def make_full_team_sheet():
 
 def make_wr_sheet():
     #WR DATA
-    wr_data = scrape_receiving_page(url4)
+    wr_data = combine_wr_te_stats()
     df_wr = pd.DataFrame(wr_data)
 
+
+    df_wr['TM %'] = pd.to_numeric(df_wr['TM %'], errors='coerce')
     df_wr['Tgt/G'] = pd.to_numeric(df_wr['Tgt/G'], errors='coerce')
     df_wr['Y/R'] = pd.to_numeric(df_wr['Y/R'], errors='coerce')
     df_wr['R/G'] = pd.to_numeric(df_wr['R/G'], errors='coerce')
@@ -931,7 +1095,7 @@ def excel_maker():
         # Write each DataFrame to a different sheet/tab
         df_team.to_excel(writer, sheet_name="Team Stats", index=False)
         df_qb.to_excel(writer, sheet_name="QB Stats", index=False)
-        df_wr.to_excel(writer, sheet_name="WR Stats", index=False)
+        df_wr.to_excel(writer, sheet_name="WR TE Stats", index=False)
         df_rb.to_excel(writer, sheet_name="RB Stats", index=False)
 
 def find_matchups():
