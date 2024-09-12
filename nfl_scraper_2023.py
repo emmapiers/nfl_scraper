@@ -587,8 +587,6 @@ def normalize_player_name(player_name):
 
     return normalized_name
 
-
-
 def scrape_rushing_page(url5):
     # NEED STATS FROM RB_STATS
     driver = webdriver.Safari()
@@ -841,7 +839,6 @@ def main():
     with open('rb_data.pkl', 'wb') as file:
         pickle.dump(rb_combined_data, file)
     '''
-   
  
 def make_qb_sheet():
     #QB DATA
@@ -1091,7 +1088,7 @@ def excel_maker():
 
 
     #Make excel sheet
-    with pd.ExcelWriter("nfl_stats.xlsx", engine="xlsxwriter") as writer:
+    with pd.ExcelWriter("nfl_stats_2023.xlsx", engine="xlsxwriter") as writer:
         # Write each DataFrame to a different sheet/tab
         df_team.to_excel(writer, sheet_name="Team Stats", index=False)
         df_qb.to_excel(writer, sheet_name="QB Stats", index=False)
