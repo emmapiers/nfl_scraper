@@ -18,6 +18,12 @@ url6 = "https://www.pro-football-reference.com/years/2023/#all_rushing"
 url7 = "https://www.pro-football-reference.com/years/2023/#all_team_stats"
 url8 = "https://www.fantasypros.com/nfl/advanced-stats-wr.php?year=2023"
 url9 = "https://www.fantasypros.com/nfl/advanced-stats-te.php?year=2023"
+url10 = "https://www.pro-football-reference.com/years/2023/fantasy-points-against-RB.htm"
+url11 = "https://www.pro-football-reference.com/years/2023/fantasy-points-against-QB.htm"
+url12 = "https://www.pro-football-reference.com/years/2023/fantasy-points-against-WR.htm"
+url13 = "https://www.pro-football-reference.com/years/2023/fantasy-points-against-TE.htm"
+
+
 
 team_shorthand_to_full = {
     "ARI": "Arizona Cardinals",
@@ -787,9 +793,17 @@ def combine_rb_stats(rushing_stats, receiving_stats):
 
     return combined_stats
 
-def combine_team_stats(offense_data, defense_data):
+def combine_team_stats(offense_data, defense_data, dk_points_data):
     combined_list = []
+
+    # Reverse the dictionary to map full names to shorthand
+    team_full_to_shorthand = {v: k for k, v in team_shorthand_to_full.items()}
     
+    # Convert dk_points_data team names to shorthand
+    for dk_item in dk_points_data:
+        full_name = dk_item['Team']
+        dk_item['Team'] = team_full_to_shorthand.get(full_name, full_name)
+
     # Loop through offense data
     for offense_item in offense_data:
         team_name = offense_item['Team']
@@ -797,12 +811,17 @@ def combine_team_stats(offense_data, defense_data):
         # Find the corresponding defense entry
         matching_defense_item = next((item for item in defense_data if item['Team'] == team_name), None)
         
+        # Find the corresponding DK Points entry
+        matching_dk_points_item = next((item for item in dk_points_data if item['Team'] == team_name), None)
+        
+        # Merge offense and defense data
+        combined_item = {**offense_item}
         if matching_defense_item:
-            # Merge the two dictionaries if both exist
-            combined_item = {**offense_item, **matching_defense_item}
-        else:
-            # If no matching defense data, just use offense data
-            combined_item = offense_item
+            combined_item.update(matching_defense_item)
+        
+        # Add DK Points if available
+        if matching_dk_points_item:
+            combined_item.update(matching_dk_points_item)
         
         combined_list.append(combined_item)
     
@@ -822,8 +841,9 @@ def main():
     #TEAM DATA
     offense_data = scrap_team_offence_page(url7)
     defense_data = scrape_team_defense_page(url2)
+    dk_points_data = 
 
-    team_data = combine_team_stats(offense_data, defense_data)
+    team_data = combine_team_stats(offense_data, defense_data, dk_points_data)
     with open('team_data.pkl', 'wb') as file:
         pickle.dump(team_data, file)
  
@@ -861,46 +881,50 @@ def make_qb_sheet():
 
     games_for_cur_round = find_matchups()
 
+    df_qb = pd.merge(df_qb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                     left_on='Team', right_on='Home Team Shorthand', how='left')
+
+    df_qb = pd.merge(df_qb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                     left_on='Team', right_on='Away Team Shorthand', how='left')
+
+    # Combine the shorthand columns and find opponent
+    df_qb['Home Team Shorthand'] = df_qb['Home Team Shorthand_x'].combine_first(df_qb['Home Team Shorthand_y'])
+    df_qb['Away Team Shorthand'] = df_qb['Away Team Shorthand_x'].combine_first(df_qb['Away Team Shorthand_y'])
+
+    df_qb.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
+                        'Away Team Shorthand_x', 'Away Team Shorthand_y'], inplace=True)
+
+    # Find the opponent team shorthand
+    df_qb['Opponent Team Shorthand'] = np.where(df_qb['Home Team Shorthand'] == df_qb['Team'],
+                                                df_qb['Away Team Shorthand'], df_qb['Home Team Shorthand'])
+
+    df_qb.drop(columns=['Home Team Shorthand', 'Away Team Shorthand'], inplace=True)
+    df_qb.rename(columns={'Opponent Team Shorthand': 'Weekly Opponent'}, inplace=True)
+    
+    # Merge QB data with team stats of the opponent
+    
     df_team = make_team_sheet()
 
-   # Merge QB stats where QB team matches Home Team Shorthand
-    df_qb = pd.merge(df_qb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
-                          left_on='Team', right_on='Home Team Shorthand', how='left')
-
-    # Merge QB stats where QB team matches Away Team Shorthand
-    df_qb = pd.merge(df_qb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
-                          left_on='Team', right_on='Away Team Shorthand', how='left')
+    team_full_to_shorthand = {v: k for k, v in team_shorthand_to_full.items()}
     
-    # Combine 'Home Team Shorthand_x' with 'Away Team Shorthand_y' and 'Away Team Shorthand_x' with 'Home Team Shorthand_y'
-    df_qb['Home Team Shorthand'] = np.where(df_qb['Home Team Shorthand_x'].notna(), 
-                                            df_qb['Home Team Shorthand_x'], df_qb['Home Team Shorthand_y'])
+    df_team['Team'] = df_team['Team'].map(team_full_to_shorthand).fillna(df_team['Team'])
 
-    df_qb['Away Team Shorthand'] = np.where(df_qb['Away Team Shorthand_x'].notna(), 
-                                            df_qb['Away Team Shorthand_x'], df_qb['Away Team Shorthand_y'])
 
-    # Drop the old _x and _y columns
-    df_qb = df_qb.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
-                                'Away Team Shorthand_x', 'Away Team Shorthand_y'])
-    
-    # Find the opponent team shorthand (the team that doesn't match the QB's team)
-    df_qb['Opponent Team Shorthand'] = np.where(df_qb['Home Team Shorthand'] == df_qb['Team'],
-                                                df_qb['Away Team Shorthand'],
-                                                df_qb['Home Team Shorthand'])
+    # Now merge using the converted long-hand team names
+    df_final = pd.merge(df_qb, df_team, left_on='Weekly Opponent', right_on='Team', how='left')
 
-    # Merge with team stats of the opponent
-    df_final = pd.merge(df_qb, df_team, left_on='Opponent Team Shorthand', right_on='Team', how='left', suffixes=('', '_opponent'))
+    df_final.rename(columns={'Team_x': 'Team'}, inplace=True)
+    df_final.drop(columns=['Team_y'], inplace=True)
 
-    df_final = df_final.drop(columns=['Home Team Shorthand', 'Away Team Shorthand', 'Opponent Team Shorthand'])
-    df_final.rename(columns={'Team_opponent': 'Opponent'}, inplace=True)
-    
     return df_final
-
+    
 def make_team_sheet():
     #TEAM DATA
     offense_data = scrap_team_offence_page(url7)
     defense_data = scrape_team_defense_page(url2)
+    dk_points_data = merge_dk_team_data(url10, url11, url12, url13)
 
-    team_data = combine_team_stats(offense_data, defense_data)
+    team_data = combine_team_stats(offense_data, defense_data, dk_points_data)
     
     df_t = pd.DataFrame(team_data)
     
@@ -911,6 +935,11 @@ def make_team_sheet():
     df_t['Plays/G AG'] = pd.to_numeric(df_t['Plays/G AG'], errors='coerce')
     df_t['Pass %/G AG'] = pd.to_numeric(df_t['Pass %/G AG'], errors='coerce')
     df_t['Rush %/G AG'] = pd.to_numeric(df_t['Rush %/G AG'], errors='coerce')
+    df_t['Rush %/G AG'] = pd.to_numeric(df_t['Rush %/G AG'], errors='coerce')
+    df_t['DKPt Against RB'] = pd.to_numeric(df_t['DKPt Against RB'], errors='coerce')
+    df_t['DKPt Against WR'] = pd.to_numeric(df_t['DKPt Against WR'], errors='coerce')
+    df_t['DKPt Against QB'] = pd.to_numeric(df_t['DKPt Against QB'], errors='coerce')
+    df_t['DKPt Against TE'] = pd.to_numeric(df_t['DKPt Against TE'], errors='coerce')
 
     df_t.fillna(0, inplace=True)
 
@@ -920,18 +949,23 @@ def make_full_team_sheet():
     #TEAM DATA
     offense_data = scrap_team_offence_page(url7)
     defense_data = scrape_team_defense_page(url2)
+    dk_points_data = merge_dk_team_data(url10, url11, url12, url13)
 
-    team_data = combine_team_stats(offense_data, defense_data)
+    team_data = combine_team_stats(offense_data, defense_data, dk_points_data)
     
     df_t = pd.DataFrame(team_data)
     
-
     df_t['Plays/G'] = pd.to_numeric(df_t['Plays/G'], errors='coerce')
     df_t['Pass %/G'] = pd.to_numeric(df_t['Pass %/G'], errors='coerce')
     df_t['Rush %/G'] = pd.to_numeric(df_t['Rush %/G'], errors='coerce')
     df_t['Plays/G AG'] = pd.to_numeric(df_t['Plays/G AG'], errors='coerce')
     df_t['Pass %/G AG'] = pd.to_numeric(df_t['Pass %/G AG'], errors='coerce')
     df_t['Rush %/G AG'] = pd.to_numeric(df_t['Rush %/G AG'], errors='coerce')
+    df_t['DKPt Against RB'] = pd.to_numeric(df_t['DKPt Against RB'], errors='coerce')
+    df_t['DKPt Against WR'] = pd.to_numeric(df_t['DKPt Against WR'], errors='coerce')
+    df_t['DKPt Against QB'] = pd.to_numeric(df_t['DKPt Against QB'], errors='coerce')
+    df_t['DKPt Against TE'] = pd.to_numeric(df_t['DKPt Against TE'], errors='coerce')
+
 
     df_t.fillna(0, inplace=True)
 
@@ -939,36 +973,47 @@ def make_full_team_sheet():
 
     df_team = df_t.copy()
 
-   # Merge QB stats where QB team matches Home Team Shorthand
     df_t = pd.merge(df_t, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
-                          left_on='Team', right_on='Home Team Shorthand', how='left')
+                     left_on='Team', right_on='Home Team Shorthand', how='left')
 
-    # Merge QB stats where QB team matches Away Team Shorthand
     df_t = pd.merge(df_t, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
-                          left_on='Team', right_on='Away Team Shorthand', how='left')
-    
-    # Combine 'Home Team Shorthand_x' with 'Away Team Shorthand_y' and 'Away Team Shorthand_x' with 'Home Team Shorthand_y'
-    df_t['Home Team Shorthand'] = np.where(df_t['Home Team Shorthand_x'].notna(), 
-                                            df_t['Home Team Shorthand_x'], df_t['Home Team Shorthand_y'])
+                     left_on='Team', right_on='Away Team Shorthand', how='left')
 
-    df_t['Away Team Shorthand'] = np.where(df_t['Away Team Shorthand_x'].notna(), 
-                                            df_t['Away Team Shorthand_x'], df_t['Away Team Shorthand_y'])
+    # Combine the shorthand columns and find opponent
+    df_t['Home Team Shorthand'] = df_t['Home Team Shorthand_x'].combine_first(df_t['Home Team Shorthand_y'])
+    df_t['Away Team Shorthand'] = df_t['Away Team Shorthand_x'].combine_first(df_t['Away Team Shorthand_y'])
 
-    # Drop the old _x and _y columns
-    df_t = df_t.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
-                                'Away Team Shorthand_x', 'Away Team Shorthand_y'])
-    
-    # Find the opponent team shorthand (the team that doesn't match the QB's team)
+    df_t.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
+                        'Away Team Shorthand_x', 'Away Team Shorthand_y'], inplace=True)
+
+    # Find the opponent team shorthand
     df_t['Opponent Team Shorthand'] = np.where(df_t['Home Team Shorthand'] == df_t['Team'],
-                                                df_t['Away Team Shorthand'],
-                                                df_t['Home Team Shorthand'])
+                                                df_t['Away Team Shorthand'], df_t['Home Team Shorthand'])
 
-    # Merge with team stats of the opponent
-    df_final = pd.merge(df_t, df_team, left_on='Opponent Team Shorthand', right_on='Team', how='left', suffixes=('', '_opponent'))
-
-    df_final = df_final.drop(columns=['Home Team Shorthand', 'Away Team Shorthand', 'Opponent Team Shorthand'])
-    df_final.rename(columns={'Team_opponent': 'Opponent'}, inplace=True)
+    df_t.drop(columns=['Home Team Shorthand', 'Away Team Shorthand'], inplace=True)
+    df_t.rename(columns={'Opponent Team Shorthand': 'Weekly Opponent'}, inplace=True)
     
+    # Merge QB data with team stats of the opponent
+
+
+    team_full_to_shorthand = {v: k for k, v in team_shorthand_to_full.items()}
+    
+    df_team['Team'] = df_team['Team'].map(team_full_to_shorthand).fillna(df_team['Team'])
+
+
+    # Now merge using the converted long-hand team names
+    df_final = pd.merge(df_t, df_team, left_on='Weekly Opponent', right_on='Team', how='left')
+
+    df_final.rename(columns={'Team_x': 'Team'}, inplace=True)
+    df_final.drop(columns=['Team_y'], inplace=True)
+
+    for col in df_final.columns:
+        if '_x' in col:
+            df_final[col.replace('_x', '')] = df_final[col]
+        if '_y' in col:
+            df_final.drop(columns=[col], inplace=True)
+
+
     return df_final
 
 def make_wr_sheet():
@@ -988,38 +1033,41 @@ def make_wr_sheet():
 
     games_for_cur_round = find_matchups()
 
+    df_wr = pd.merge(df_wr, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                     left_on='Team', right_on='Home Team Shorthand', how='left')
+
+    df_wr = pd.merge(df_wr, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                     left_on='Team', right_on='Away Team Shorthand', how='left')
+
+    # Combine the shorthand columns and find opponent
+    df_wr['Home Team Shorthand'] = df_wr['Home Team Shorthand_x'].combine_first(df_wr['Home Team Shorthand_y'])
+    df_wr['Away Team Shorthand'] = df_wr['Away Team Shorthand_x'].combine_first(df_wr['Away Team Shorthand_y'])
+
+    df_wr.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
+                        'Away Team Shorthand_x', 'Away Team Shorthand_y'], inplace=True)
+
+    # Find the opponent team shorthand
+    df_wr['Opponent Team Shorthand'] = np.where(df_wr['Home Team Shorthand'] == df_wr['Team'],
+                                                df_wr['Away Team Shorthand'], df_wr['Home Team Shorthand'])
+
+    df_wr.drop(columns=['Home Team Shorthand', 'Away Team Shorthand'], inplace=True)
+    df_wr.rename(columns={'Opponent Team Shorthand': 'Weekly Opponent'}, inplace=True)
+    
+    # Merge QB data with team stats of the opponent
+    
     df_team = make_team_sheet()
 
-   # Merge QB stats where QB team matches Home Team Shorthand
-    df_wr = pd.merge(df_wr, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
-                          left_on='Team', right_on='Home Team Shorthand', how='left')
-
-    # Merge QB stats where QB team matches Away Team Shorthand
-    df_wr = pd.merge(df_wr, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
-                          left_on='Team', right_on='Away Team Shorthand', how='left')
+    team_full_to_shorthand = {v: k for k, v in team_shorthand_to_full.items()}
     
-    # Combine 'Home Team Shorthand_x' with 'Away Team Shorthand_y' and 'Away Team Shorthand_x' with 'Home Team Shorthand_y'
-    df_wr['Home Team Shorthand'] = np.where(df_wr['Home Team Shorthand_x'].notna(), 
-                                            df_wr['Home Team Shorthand_x'], df_wr['Home Team Shorthand_y'])
+    df_team['Team'] = df_team['Team'].map(team_full_to_shorthand).fillna(df_team['Team'])
 
-    df_wr['Away Team Shorthand'] = np.where(df_wr['Away Team Shorthand_x'].notna(), 
-                                            df_wr['Away Team Shorthand_x'], df_wr['Away Team Shorthand_y'])
 
-    # Drop the old _x and _y columns
-    df_wr = df_wr.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
-                                'Away Team Shorthand_x', 'Away Team Shorthand_y'])
-    
-    # Find the opponent team shorthand (the team that doesn't match the QB's team)
-    df_wr['Opponent Team Shorthand'] = np.where(df_wr['Home Team Shorthand'] == df_wr['Team'],
-                                                df_wr['Away Team Shorthand'],
-                                                df_wr['Home Team Shorthand'])
+    # Now merge using the converted long-hand team names
+    df_final = pd.merge(df_wr, df_team, left_on='Weekly Opponent', right_on='Team', how='left')
 
-    # Merge with team stats of the opponent
-    df_final = pd.merge(df_wr, df_team, left_on='Opponent Team Shorthand', right_on='Team', how='left', suffixes=('', '_opponent'))
+    df_final.rename(columns={'Team_x': 'Team'}, inplace=True)
+    df_final.drop(columns=['Team_y'], inplace=True)
 
-    df_final = df_final.drop(columns=['Home Team Shorthand', 'Away Team Shorthand', 'Opponent Team Shorthand'])
-    df_final.rename(columns={'Team_opponent': 'Opponent'}, inplace=True)
-    
     return df_final
 
 def make_rb_sheet():
@@ -1044,45 +1092,113 @@ def make_rb_sheet():
 
     games_for_cur_round = find_matchups()
 
+    df_rb = pd.merge(df_rb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                     left_on='Team', right_on='Home Team Shorthand', how='left')
+
+    df_rb = pd.merge(df_rb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
+                     left_on='Team', right_on='Away Team Shorthand', how='left')
+
+    # Combine the shorthand columns and find opponent
+    df_rb['Home Team Shorthand'] = df_rb['Home Team Shorthand_x'].combine_first(df_rb['Home Team Shorthand_y'])
+    df_rb['Away Team Shorthand'] = df_rb['Away Team Shorthand_x'].combine_first(df_rb['Away Team Shorthand_y'])
+
+    df_rb.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
+                        'Away Team Shorthand_x', 'Away Team Shorthand_y'], inplace=True)
+
+    # Find the opponent team shorthand
+    df_rb['Opponent Team Shorthand'] = np.where(df_rb['Home Team Shorthand'] == df_rb['Team'],
+                                                df_rb['Away Team Shorthand'], df_rb['Home Team Shorthand'])
+
+    df_rb.drop(columns=['Home Team Shorthand', 'Away Team Shorthand'], inplace=True)
+    df_rb.rename(columns={'Opponent Team Shorthand': 'Weekly Opponent'}, inplace=True)
+    
+    # Merge QB data with team stats of the opponent
+    
     df_team = make_team_sheet()
 
-   # Merge QB stats where QB team matches Home Team Shorthand
-    df_rb = pd.merge(df_rb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
-                          left_on='Team', right_on='Home Team Shorthand', how='left')
-
-    # Merge QB stats where QB team matches Away Team Shorthand
-    df_rb = pd.merge(df_rb, games_for_cur_round[['Home Team Shorthand', 'Away Team Shorthand']],
-                          left_on='Team', right_on='Away Team Shorthand', how='left')
+    team_full_to_shorthand = {v: k for k, v in team_shorthand_to_full.items()}
     
-    # Combine 'Home Team Shorthand_x' with 'Away Team Shorthand_y' and 'Away Team Shorthand_x' with 'Home Team Shorthand_y'
-    df_rb['Home Team Shorthand'] = np.where(df_rb['Home Team Shorthand_x'].notna(), 
-                                            df_rb['Home Team Shorthand_x'], df_rb['Home Team Shorthand_y'])
+    df_team['Team'] = df_team['Team'].map(team_full_to_shorthand).fillna(df_team['Team'])
 
-    df_rb['Away Team Shorthand'] = np.where(df_rb['Away Team Shorthand_x'].notna(), 
-                                            df_rb['Away Team Shorthand_x'], df_rb['Away Team Shorthand_y'])
 
-    # Drop the old _x and _y columns
-    df_rb = df_rb.drop(columns=['Home Team Shorthand_x', 'Home Team Shorthand_y', 
-                                'Away Team Shorthand_x', 'Away Team Shorthand_y'])
-    
-    # Find the opponent team shorthand (the team that doesn't match the QB's team)
-    df_rb['Opponent Team Shorthand'] = np.where(df_rb['Home Team Shorthand'] == df_rb['Team'],
-                                                df_rb['Away Team Shorthand'],
-                                                df_rb['Home Team Shorthand'])
+    # Now merge using the converted long-hand team names
+    df_final = pd.merge(df_rb, df_team, left_on='Weekly Opponent', right_on='Team', how='left')
 
-    # Merge with team stats of the opponent
-    df_final = pd.merge(df_rb, df_team, left_on='Opponent Team Shorthand', right_on='Team', how='left', suffixes=('', '_opponent'))
+    df_final.rename(columns={'Team_x': 'Team'}, inplace=True)
+    df_final.drop(columns=['Team_y'], inplace=True)
 
-    df_final = df_final.drop(columns=['Home Team Shorthand', 'Away Team Shorthand', 'Opponent Team Shorthand'])
-    df_final.rename(columns={'Team_opponent': 'Opponent'}, inplace=True)
-    
     return df_final
+
+def scrape_dk_points(url, position):
+    # Full to shorthand dictionary
+    full_to_shorthand = {v: k for k, v in team_shorthand_to_full.items()}
+    
+    driver = webdriver.Safari()
+    driver.get(url)
+    driver.implicitly_wait(10)
+
+    # Parse the page with BeautifulSoup
+    html = driver.page_source
+    soup = bs(html, 'html.parser')
+
+    # Find the table with fantasy points data
+    table = soup.find('table', {'id': 'fantasy_def'})
+    
+    if not table:
+        print(f"Table for {position} not found")
+        driver.quit()
+        return None
+
+    dk_points_stats = []
+
+    rows = table.find_all('tr')
+    for row in rows:
+        headers = row.find_all('th', {'data-stat': 'team'})
+        if headers:  # if there is a 'th' tag with team data
+            team = headers[0].text.strip()  # Team name
+            cols = row.find_all('td')
+            if cols:
+                dkpt = cols[-2].text.strip()  # DKPt column (second last column)
+                
+                dk_points_stats.append({
+                    "Team": team,
+                    f"DKPt Against {position}": dkpt
+                })
+
+    driver.quit()
+    
+    return dk_points_stats
+
+def merge_dk_team_data(rb_url, qb_url, wr_url, te_url):
+    # Scrape data for each position
+    rb_data = scrape_dk_points(rb_url, 'RB')
+    qb_data = scrape_dk_points(qb_url, 'QB')
+    wr_data = scrape_dk_points(wr_url, 'WR')
+    te_data = scrape_dk_points(te_url, 'TE')
+    merged_data = {}
+
+    # Add RB data
+    for entry in rb_data:
+        team = entry["Team"]
+        merged_data[team] = {"Team": team, "DKPt Against RB": entry["DKPt Against RB"]}
+
+    # Add QB, WR, and TE data
+    for data, pos in [(qb_data, "DKPt Against QB"), (wr_data, "DKPt Against WR"), (te_data, "DKPt Against TE")]:
+        for entry in data:
+            team = entry["Team"]
+            if team in merged_data:
+                merged_data[team][pos] = entry[pos]
+            else:
+                merged_data[team] = {"Team": team, pos: entry[pos]}
+
+    return list(merged_data.values())
 
 def excel_maker():
 
     #Make dataFrames
     df_qb = make_qb_sheet()
     df_team = make_full_team_sheet()
+    
     df_wr = make_wr_sheet()
     df_rb = make_rb_sheet()
 
@@ -1110,8 +1226,7 @@ def find_matchups():
     current_date = datetime.now().strftime('%Y-%m-%d')
     current_round = get_round_by_date(current_date)
 
-   # print(f"Current date: {current_date}, Current round: {current_round}")
-
+  
     games_for_cur_round = schedule[schedule['Round Number'] == current_round]
 
     return games_for_cur_round
@@ -1129,3 +1244,6 @@ def get_round_by_date(date_str):
 if __name__ == "__main__":
    #main()
    excel_maker()
+   #make_team_sheet()
+
+   
